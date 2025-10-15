@@ -1,0 +1,32 @@
+run:
+  dataset: histopathology_patches
+  clients: 10
+  topology: centralized   # centralized | p2p
+  mode: async             # sync | async
+  seed: 1337
+
+train:
+  local_epochs: 1
+  batch_size: 64
+  optimizer: adam
+  lr: 1e-3
+
+partition:
+  scheme: dirichlet
+  alpha: 0.5
+  imbalance: true
+
+async:
+  buffer_B: 6
+  timeout_T_ms: 3000
+  staleness_S_max: 2
+
+p2p:
+  neighbors: ["127.0.0.1:9101","127.0.0.1:9102"]
+  pushsum_interval_ms: 500
+
+security:
+  mtls: true
+  certs_dir: ./certs
+  secure_agg: true
+  two_phase_commit: true

@@ -1,0 +1,20 @@
+syntax = "proto3";
+package fl;
+
+message ClientHello { string client_id = 1; string version = 2; }
+message ModelEnvelope { bytes flat_params = 1; uint64 base_round = 2; }
+message TrainConfig { uint32 local_epochs = 1; uint32 batch_size = 2; float lr = 3; }
+message ClientUpdate { string client_id = 1; uint64 base_round = 2; bytes masked_delta = 3; uint64 n_samples = 4; }
+message Metrics { string client_id = 1; uint64 round = 2; double loss = 3; double acc = 4; }
+message CommitIntent { string client_id = 1; uint64 round = 2; bool available = 3; }
+message CommitSet { uint64 round = 1; repeated string client_ids = 2; }
+message MaskReveal { string src = 1; string dst = 2; bytes mask = 3; }
+
+service Coordinator {
+  rpc Register(ClientHello) returns (TrainConfig);
+  rpc BroadcastModel(ClientHello) returns (ModelEnvelope);
+  rpc SubmitIntent(CommitIntent) returns (CommitSet);
+  rpc SubmitUpdate(ClientUpdate) returns (.google.protobuf.Empty);
+  rpc RevealMask(MaskReveal) returns (.google.protobuf.Empty);
+  rpc StreamMetrics(stream Metrics) returns (.google.protobuf.Empty);
+}
