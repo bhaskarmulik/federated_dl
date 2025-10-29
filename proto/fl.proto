@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package fl;
+
+option go_package = "fl";
+option java_multiple_files = true;
+
+message ClientInfo {
+  string client_id = 1;
+  string dataset = 2;          // optional tag, e.g., "hospital-A" / modality
+  string model_name = 3;       // e.g., "resnet18"
+  string framework = 4;        // "torch", "tf"
+  string version = 5;          // client code version
+}
+
+message TrainPlan {
+  string round_id = 1;         // e.g., "r-0007"
+  string optimizer = 2;        // "sgd", "adam"
+  float lr = 3;
+  int32 local_epochs = 4;
+  int32 batch_size = 5;
+  bool send_metrics = 6;
+}
+
+message ModelBlob {
+  bytes weights = 1;           // serialized bytes (torch.save/io.BytesIO) or npz
+  string format = 2;           // "torch_state_dict", "numpy_npz"
+}
+
+message PullGlobalRequest {
+  ClientInfo client = 1;
+  string round_id = 2;
+}
+
+message PullGlobalResponse {
+  ModelBlob global_model = 1;
+  TrainPlan plan = 2;
+}
+
+message LocalUpdate {
+  ClientInfo client = 1;
+  string round_id = 2;
+  ModelBlob update = 3;        // either full weights or delta
+  int64 num_samples = 4;       // for weighted FedAvg
+  string metric_json = 5;      // optional {"loss":..., "acc":...}
+}
+
+message Ack {
+  string round_id = 1;
+  string status = 2;           // "OK" | "ERROR"
+  string message = 3;
+}
+
+message Chunk {
+  string round_id = 1;
+  string client_id = 2;
+  int32 seq = 3;
+  bytes data = 4;
+  bool last = 5;
+}
+
+// Service
+service Federated {
+  // Small/medium models (simple path)
+  rpc PullGlobal (PullGlobalRequest) returns (PullGlobalResponse);
+  rpc PushUpdate (LocalUpdate) returns (Ack);
+
+  // Large models (chunked streaming path)
+  rpc PullGlobalStream (PullGlobalRequest) returns (stream Chunk);
+  rpc PushUpdateStream (stream Chunk) returns (Ack);
+
+  // Health/heartbeat
+  rpc Heartbeat (ClientInfo) returns (Ack);
+}

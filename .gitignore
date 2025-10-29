@@ -1,0 +1,56 @@
+# ============================
+# Python / Federated Project
+# ============================
+
+# --- Virtual environment ---
+venv/
+env/
+myenv/
+*.env
+
+# --- Python cache / compiled ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- gRPC generated cache ---
+*.egg-info/
+build/
+dist/
+
+# --- Jupyter / notebook checkpoints ---
+.ipynb_checkpoints/
+
+# --- IDE / Editor files ---
+.vscode/
+.idea/
+*.code-workspace
+
+# --- OS / temp files ---
+.DS_Store
+Thumbs.db
+
+# --- Logs / temporary files ---
+*.log
+logs/
+*.tmp
+
+# --- Model weights / datasets ---
+models/*
+!models/.gitkeep
+
+datasets/
+data/
+
+*.csv
+*.npz
+
+# --- Credentials / certificates ---
+tls/
+*.crt
+*.key
+*.pem
+
+# --- Misc ---
+*.bak
+*.old
