@@ -28,9 +28,10 @@ from picograd.utils.seed import manual_seed
 from picograd.utils.debug import gradcheck, detect_anomaly
 
 # Sub-packages (imported as modules, matching PyTorch style)
-from picograd import nn
-from picograd import optim
-from picograd import data
+from . import nn
+from . import optim
+from . import data
+
 
 # Functional helpers — commonly used ops accessible at top level
 import numpy as np
