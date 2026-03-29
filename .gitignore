@@ -7,6 +7,7 @@ venv/
 env/
 myenv/
 *.env
+.venv/
 
 # --- Python cache / compiled ---
 __pycache__/
@@ -54,3 +55,6 @@ tls/
 # --- Misc ---
 *.bak
 *.old
+
+# Ignore all artifacts except the ones we want
+global_training/artifacts/

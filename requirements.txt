@@ -4,4 +4,4 @@ protobuf>=4.25.0
 torch>=2.1.0      # or your version
 numpy>=1.24.0
 
-. -e .  # This allows you to install the package in editable mode, which is useful for development.
+. -e
