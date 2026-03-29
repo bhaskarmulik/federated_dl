@@ -3,9 +3,9 @@ picograd/autograd/function.py
 ==============================
 Core autograd primitives:
 
-  Function   — abstract base for all differentiable operations
-  Context    — holds saved tensors / metadata for the backward pass
-  Node       — a vertex in the DAG; wraps a Function + its Context
+  Function   -- abstract base for all differentiable operations
+  Context    -- holds saved tensors / metadata for the backward pass
+  Node       -- a vertex in the DAG; wraps a Function + its Context
 
 Every differentiable op in picograd/ops/ subclasses Function and
 implements forward() + backward().  apply() is the only public entry
@@ -51,9 +51,9 @@ class Node:
 
     Attributes
     ----------
-    function    : type[Function]  — the op class (not instance)
-    ctx         : Context         — state saved during forward
-    input_nodes : list[Node|None] — parent nodes (None for leaves)
+    function    : type[Function]  -- the op class (not instance)
+    ctx         : Context         -- state saved during forward
+    input_nodes : list[Node|None] -- parent nodes (None for leaves)
     """
 
     __slots__ = ("function", "ctx", "input_nodes")
@@ -69,8 +69,8 @@ class Function:
     Abstract base for all differentiable operations.
 
     Subclasses must implement:
-      forward(ctx, *inputs) → raw backend array(s)
-      backward(ctx, *grad_outputs) → tuple of raw backend arrays (one per input)
+      forward(ctx, *inputs) -> raw backend array(s)
+      backward(ctx, *grad_outputs) -> tuple of raw backend arrays (one per input)
 
     The `apply` classmethod is the single entry point:
       out = Add.apply(a, b)

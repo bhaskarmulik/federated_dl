@@ -1,7 +1,7 @@
 """
 picograd/privacy/dp.py
 =======================
-Differential Privacy engine — DPOptimizer + PrivacyConfig.
+Differential Privacy engine -- DPOptimizer + PrivacyConfig.
 """
 from __future__ import annotations
 import numpy as np
@@ -48,7 +48,7 @@ class DPOptimizer:
     def step(self) -> None:
         from picograd.tensor import Tensor
         C  = self.max_grad_norm
-        σ  = self.noise_multiplier
+        sigma  = self.noise_multiplier
         bs = self.batch_size
 
         for group in self.optimizer.param_groups:
@@ -63,7 +63,7 @@ class DPOptimizer:
                     g = g * (C / l2)
 
                 # 2. Gaussian noise
-                noise = np.random.normal(0.0, σ * C, size=g.shape).astype(g.dtype)
+                noise = np.random.normal(0.0, sigma * C, size=g.shape).astype(g.dtype)
                 g_noisy = g + noise
 
                 # 3. Average

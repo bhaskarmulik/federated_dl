@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 tests/test_dashboard.py
 ========================
@@ -13,14 +14,14 @@ from dashboard.backend.services.metrics_store import MetricsStore
 from dashboard.backend.services.fl_bridge import FLDashboardBridge
 
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+# -- helpers ------------------------------------------------------------------
 
 def assert_close(a, b, atol=1e-6, msg=""):
     diff = abs(float(a) - float(b))
     assert diff < atol, f"{msg} | diff={diff:.2e}"
 
 
-# ── 1. MetricsStore ───────────────────────────────────────────────────────────
+# -- 1. MetricsStore -----------------------------------------------------------
 
 def test_store_server_status():
     store = MetricsStore()
@@ -28,7 +29,7 @@ def test_store_server_status():
     assert store.server["status"] == "running"
     assert store.server["strategy"] == "fedavg"
     assert store.server["start_time"] is not None
-    print("  ✓ MetricsStore: set_server_status works")
+    print("  [PASS] MetricsStore: set_server_status works")
 
 
 def test_store_client_registration():
@@ -38,7 +39,7 @@ def test_store_client_registration():
     assert len(clients) == 1
     assert clients[0]["client_id"] == "hospital_a"
     assert clients[0]["n_samples"] == 1000
-    print("  ✓ MetricsStore: client registration and retrieval")
+    print("  [PASS] MetricsStore: client registration and retrieval")
 
 
 def test_store_client_online_timeout():
@@ -46,9 +47,9 @@ def test_store_client_online_timeout():
     store.register_client("recent_client")
     store._store if False else None
     clients = store.get_clients()
-    # Just registered → should be online
+    # Just registered -> should be online
     assert clients[0]["online"] is True
-    print("  ✓ MetricsStore: recently-seen client marked online")
+    print("  [PASS] MetricsStore: recently-seen client marked online")
 
 
 def test_store_round_recording():
@@ -64,7 +65,7 @@ def test_store_round_recording():
     last2 = store.get_rounds(last_n=2)
     assert len(last2) == 2
     assert last2[0]["round"] == 2
-    print("  ✓ MetricsStore: round recording and retrieval (incl last_n)")
+    print("  [PASS] MetricsStore: round recording and retrieval (incl last_n)")
 
 
 def test_store_weight_deltas():
@@ -77,7 +78,7 @@ def test_store_weight_deltas():
     heatmap = store.get_weight_heatmap()
     assert "encoder.conv1.weight" in heatmap
     assert len(heatmap["encoder.conv1.weight"]) == 5
-    print("  ✓ MetricsStore: weight delta heatmap data stored")
+    print("  [PASS] MetricsStore: weight delta heatmap data stored")
 
 
 def test_store_privacy_timeline():
@@ -88,7 +89,7 @@ def test_store_privacy_timeline():
     pdata = store.get_privacy()
     assert len(pdata["timeline"]) == 4
     assert_close(pdata["current_eps"], 2.0, msg="current_eps")
-    print("  ✓ MetricsStore: privacy timeline recorded")
+    print("  [PASS] MetricsStore: privacy timeline recorded")
 
 
 def test_store_gradcam():
@@ -102,7 +103,7 @@ def test_store_gradcam():
     assert data["anomaly_score"] == 0.042
     all_gcam = store.get_gradcam()
     assert "hospital_a" in all_gcam
-    print("  ✓ MetricsStore: Grad-CAM data stored and retrieved")
+    print("  [PASS] MetricsStore: Grad-CAM data stored and retrieved")
 
 
 def test_store_containers():
@@ -115,7 +116,7 @@ def test_store_containers():
     assert containers[0]["container_id"] == "container_abc"
     store.remove_container("container_abc")
     assert len(store.get_containers()) == 0
-    print("  ✓ MetricsStore: container lifecycle (add/remove)")
+    print("  [PASS] MetricsStore: container lifecycle (add/remove)")
 
 
 def test_store_event_log():
@@ -126,7 +127,7 @@ def test_store_event_log():
     log = store.get_log()
     assert len(log) >= 3
     assert all("message" in e for e in log)
-    print(f"  ✓ MetricsStore: event log ({len(log)} entries)")
+    print(f"  [PASS] MetricsStore: event log ({len(log)} entries)")
 
 
 def test_store_snapshot():
@@ -140,7 +141,7 @@ def test_store_snapshot():
     assert "rounds"    in snap
     assert "privacy"   in snap
     assert snap["server"]["strategy"] == "fedprox"
-    print("  ✓ MetricsStore: snapshot() returns complete state")
+    print("  [PASS] MetricsStore: snapshot() returns complete state")
 
 
 def test_store_thread_safety():
@@ -170,10 +171,10 @@ def test_store_thread_safety():
     for t in threads: t.join(timeout=10)
 
     assert not errors, f"Thread errors: {errors}"
-    print("  ✓ MetricsStore: thread-safe under concurrent read/write")
+    print("  [PASS] MetricsStore: thread-safe under concurrent read/write")
 
 
-# ── 2. FLDashboardBridge ──────────────────────────────────────────────────────
+# -- 2. FLDashboardBridge ------------------------------------------------------
 
 def test_bridge_training_lifecycle():
     from picograd.models.anomaly_ae import AnomalyAE
@@ -200,7 +201,7 @@ def test_bridge_training_lifecycle():
 
     bridge.on_training_done()
     assert bridge._store.server["status"] == "done"
-    print("  ✓ FLDashboardBridge: full training lifecycle")
+    print("  [PASS] FLDashboardBridge: full training lifecycle")
 
 
 def test_bridge_privacy_updates():
@@ -210,7 +211,7 @@ def test_bridge_privacy_updates():
     pdata = bridge._store.get_privacy()
     assert len(pdata["timeline"]) == 4
     assert_close(pdata["current_eps"], 2.3, msg="privacy eps")
-    print("  ✓ FLDashboardBridge: privacy updates recorded")
+    print("  [PASS] FLDashboardBridge: privacy updates recorded")
 
 
 def test_bridge_client_events():
@@ -225,7 +226,7 @@ def test_bridge_client_events():
     clients2 = bridge._store.get_clients()
     c2 = next((c for c in clients2 if c["client_id"] == "hospital_x"), None)
     assert c2["status"] == "disconnected"
-    print("  ✓ FLDashboardBridge: client connect/update/disconnect lifecycle")
+    print("  [PASS] FLDashboardBridge: client connect/update/disconnect lifecycle")
 
 
 def test_bridge_gradcam_encoding():
@@ -238,7 +239,7 @@ def test_bridge_gradcam_encoding():
     assert "heatmap_b64"   in data
     assert "original_b64"  in data
     assert len(data["heatmap_b64"]) > 10
-    print("  ✓ FLDashboardBridge: Grad-CAM PNG encoding to base64")
+    print("  [PASS] FLDashboardBridge: Grad-CAM PNG encoding to base64")
 
 
 def test_bridge_weight_deltas():
@@ -260,10 +261,10 @@ def test_bridge_weight_deltas():
     bridge.on_round_complete(1, model, [{"client_id":"c0","train_loss":0.05}], prev_sd)
     heatmap = bridge._store.get_weight_heatmap()
     assert len(heatmap) > 0
-    print(f"  ✓ FLDashboardBridge: {len(heatmap)} layer deltas tracked")
+    print(f"  [PASS] FLDashboardBridge: {len(heatmap)} layer deltas tracked")
 
 
-# ── 3. Integration: store + bridge + FL loop ──────────────────────────────────
+# -- 3. Integration: store + bridge + FL loop ----------------------------------
 
 def test_full_fl_dashboard_integration():
     """Simulate 5 FL rounds fully piped through the dashboard bridge."""
@@ -318,11 +319,11 @@ def test_full_fl_dashboard_integration():
     assert len(snap["privacy"]["timeline"]) == 5
     assert len(snap["clients"]) == 2
     assert len(bridge._store.get_weight_heatmap()) > 0
-    print(f"  ✓ Full FL→dashboard integration: 5 rounds, "
-          f"ε={snap['privacy']['current_eps']:.3f}")
+    print(f"  [PASS] Full FL->dashboard integration: 5 rounds, "
+          f"epsilon={snap['privacy']['current_eps']:.3f}")
 
 
-# ── Runner ───────────────────────────────────────────────────────────────────
+# -- Runner -------------------------------------------------------------------
 
 if __name__ == "__main__":
     tests = [
@@ -350,11 +351,11 @@ if __name__ == "__main__":
         try:
             t(); passed += 1
         except Exception as e:
-            print(f"  ✗ {t.__name__}: {e}")
+            print(f"  [FAIL] {t.__name__}: {e}")
             import traceback; traceback.print_exc()
             failed += 1
     print(f"\n{'='*60}")
     print(f"Results: {passed}/{passed+failed} passed  "
-          f"{'✓ ALL PASS' if failed==0 else f'✗ {failed} FAILED'}")
+          f"{'[PASS] ALL PASS' if failed==0 else f'[FAIL] {failed} FAILED'}")
     print('='*60)
     if failed: sys.exit(1)

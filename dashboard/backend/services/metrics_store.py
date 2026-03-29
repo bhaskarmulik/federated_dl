@@ -31,7 +31,7 @@ class MetricsStore:
         self._lock      = threading.RLock()
         self._max       = max_rounds
 
-        # ── Server state ──────────────────────────────────────────────
+        # -- Server state ----------------------------------------------
         self.server: Dict[str, Any] = {
             "status":     "idle",       # idle | running | aggregating | done
             "strategy":   "fedavg",
@@ -42,35 +42,35 @@ class MetricsStore:
             "dp_enabled": False,
         }
 
-        # ── Clients ───────────────────────────────────────────────────
-        # client_id → {status, last_seen, round, train_loss, epsilon, n_samples}
+        # -- Clients ---------------------------------------------------
+        # client_id -> {status, last_seen, round, train_loss, epsilon, n_samples}
         self.clients: Dict[str, Dict[str, Any]] = {}
 
-        # ── Round-level metrics ───────────────────────────────────────
+        # -- Round-level metrics ---------------------------------------
         self.rounds: List[Dict[str, Any]] = []   # list of round dicts
 
-        # ── Weight deltas per layer per round ─────────────────────────
-        # layer_name → deque of (round, mean_abs_delta)
+        # -- Weight deltas per layer per round -------------------------
+        # layer_name -> deque of (round, mean_abs_delta)
         self.weight_deltas: Dict[str, deque] = {}
 
-        # ── Grad-CAM images ───────────────────────────────────────────
-        # client_id → {"heatmap_b64": str, "anomaly_score": float, ...}
+        # -- Grad-CAM images -------------------------------------------
+        # client_id -> {"heatmap_b64": str, "anomaly_score": float, ...}
         self.gradcam: Dict[str, Dict[str, Any]] = {}
 
-        # ── Privacy timeline ──────────────────────────────────────────
+        # -- Privacy timeline ------------------------------------------
         # list of {round, epsilon, delta}
         self.privacy_timeline: List[Dict[str, Any]] = []
 
-        # ── Docker containers ─────────────────────────────────────────
-        # container_id → {name, status, client_id, image}
+        # -- Docker containers -----------------------------------------
+        # container_id -> {name, status, client_id, image}
         self.containers: Dict[str, Dict[str, Any]] = {}
 
-        # ── Event log (last 200 entries) ──────────────────────────────
+        # -- Event log (last 200 entries) ------------------------------
         self.event_log: deque = deque(maxlen=200)
 
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     # Server state
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
 
     def set_server_status(self, status: str, **kwargs) -> None:
         with self._lock:
@@ -78,7 +78,7 @@ class MetricsStore:
             self.server.update(kwargs)
             if status == "running" and self.server["start_time"] is None:
                 self.server["start_time"] = time.time()
-            self._log(f"Server status → {status}")
+            self._log(f"Server status -> {status}")
 
     def set_config(self, strategy: str = "fedavg",
                    secure_agg: bool = False,
@@ -92,9 +92,9 @@ class MetricsStore:
                 "total_rounds": total_rounds,
             })
 
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     # Client management
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
 
     def register_client(self, client_id: str, **meta) -> None:
         with self._lock:
@@ -134,9 +134,9 @@ class MetricsStore:
                 result.append(d)
             return result
 
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     # Round metrics
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
 
     def record_round(self, round_num: int, metrics: Dict[str, Any]) -> None:
         with self._lock:
@@ -160,9 +160,9 @@ class MetricsStore:
             data = self.rounds[-last_n:] if last_n else self.rounds
             return list(data)
 
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     # Weight deltas (for heatmap visualisation)
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
 
     def record_weight_delta(self, round_num: int,
                             layer_deltas: Dict[str, float]) -> None:
@@ -177,9 +177,9 @@ class MetricsStore:
         with self._lock:
             return {k: list(v) for k, v in self.weight_deltas.items()}
 
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     # Grad-CAM
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
 
     def update_gradcam(self, client_id: str, data: Dict[str, Any]) -> None:
         with self._lock:
@@ -194,9 +194,9 @@ class MetricsStore:
                 return self.gradcam.get(client_id)
             return dict(self.gradcam)
 
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     # Privacy
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
 
     def record_privacy(self, round_num: int, epsilon: float,
                        delta: float = 1e-5) -> None:
@@ -219,9 +219,9 @@ class MetricsStore:
                 "current_eps": latest_eps,
             }
 
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     # Docker
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
 
     def update_container(self, container_id: str, **info) -> None:
         with self._lock:
@@ -239,9 +239,9 @@ class MetricsStore:
         with self._lock:
             return list(self.containers.values())
 
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     # Event log
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
 
     def _log(self, message: str, level: str = "info") -> None:
         self.event_log.append({
@@ -255,9 +255,9 @@ class MetricsStore:
             entries = list(self.event_log)
             return entries[-last_n:]
 
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
     # Full snapshot (for initial page load)
-    # ─────────────────────────────────────────────────────────────────
+    # -----------------------------------------------------------------
 
     def snapshot(self) -> Dict[str, Any]:
         with self._lock:

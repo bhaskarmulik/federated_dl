@@ -3,10 +3,10 @@ server/fedavg.py
 =================
 Federated Averaging (McMahan et al. 2017).
 
-Works on picograd state_dicts (dict[str, np.ndarray]) — no torch dependency.
+Works on picograd state_dicts (dict[str, np.ndarray]) -- no torch dependency.
 Replaces the original torch-based implementation.
 
-fedavg(updates, sample_counts) → aggregated state_dict
+fedavg(updates, sample_counts) -> aggregated state_dict
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ def fedavg(
 
     Returns
     -------
-    aggregated state_dict — weighted average of all client updates
+    aggregated state_dict -- weighted average of all client updates
     """
     if not updates:
         raise ValueError("fedavg: no updates provided")

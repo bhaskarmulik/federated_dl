@@ -1,74 +1,123 @@
 syntax = "proto3";
 
-package fl;
+package falcon;
 
-option go_package = "fl";
-option java_multiple_files = true;
+// ══════════════════════════════════════════════════════════════════════════
+//  FALCON — Federated Learning gRPC Service Definition
+//  
+//  Clients connect to the FederatedLearning service to:
+//    1. Register and receive the current global model
+//    2. Submit their local model update after training
+//    3. Stream heartbeat metrics during training
+// ══════════════════════════════════════════════════════════════════════════
 
-message ClientInfo {
+service FederatedLearning {
+  // Client registration — receive server config + initial global model
+  rpc Register (RegisterRequest) returns (RegisterResponse);
+
+  // Pull current global model weights
+  rpc PullGlobalModel (PullRequest) returns (stream ModelChunk);
+
+  // Push local model update after training
+  rpc PushUpdate (stream ModelChunk) returns (PushResponse);
+
+  // Heartbeat: client streams live training metrics to server
+  rpc Heartbeat (stream HeartbeatMetrics) returns (HeartbeatAck);
+
+  // Request the server to aggregate pending updates
+  rpc TriggerAggregation (AggregationRequest) returns (AggregationResponse);
+
+  // Get current server status
+  rpc GetStatus (StatusRequest) returns (ServerStatus);
+}
+
+// ─── Registration ──────────────────────────────────────────────────────────
+
+message RegisterRequest {
+  string client_id    = 1;
+  int32  n_samples    = 2;    // number of local training samples
+  string dataset_name = 3;    // e.g. "BreastMNIST"
+  float  alpha        = 4;    // non-IID concentration param
+  bool   dp_enabled   = 5;
+  float  noise_mult   = 6;
+  float  max_grad_norm= 7;
+}
+
+message RegisterResponse {
+  bool   accepted      = 1;
+  string session_token = 2;
+  int32  current_round = 3;
+  string strategy      = 4;   // fedavg | fedprox | fedbn
+  bool   secure_agg    = 5;
+  string message       = 6;
+}
+
+// ─── Model transfer (chunked for large models) ────────────────────────────
+
+message ModelChunk {
+  bytes  data        = 1;    // chunk of pickled state_dict
+  int32  chunk_index = 2;
+  int32  total_chunks= 3;
+  int32  round       = 4;    // round this model belongs to
+  string checksum    = 5;    // MD5 of full payload for integrity check
+}
+
+message PullRequest {
+  string client_id    = 1;
+  string session_token= 2;
+  int32  round        = 3;   // -1 = latest
+}
+
+message PushResponse {
+  bool   accepted      = 1;
+  string message       = 2;
+  int32  queue_position= 3;  // position in aggregation queue
+}
+
+// ─── Heartbeat ────────────────────────────────────────────────────────────
+
+message HeartbeatMetrics {
+  string client_id   = 1;
+  string session_token=2;
+  int32  round       = 3;
+  int32  step        = 4;
+  float  train_loss  = 5;
+  float  epsilon     = 6;    // current privacy budget spent
+  int64  timestamp   = 7;    // unix ms
+  float  cpu_percent = 8;
+  float  mem_mb      = 9;
+}
+
+message HeartbeatAck {
+  bool   ok       = 1;
+  string message  = 2;
+}
+
+// ─── Aggregation ──────────────────────────────────────────────────────────
+
+message AggregationRequest {
+  string client_id    = 1;
+  string session_token= 2;
+}
+
+message AggregationResponse {
+  bool   started  = 1;
+  string message  = 2;
+  int32  n_clients= 3;
+}
+
+// ─── Server status ────────────────────────────────────────────────────────
+
+message StatusRequest {
   string client_id = 1;
-  string dataset = 2;          // optional tag, e.g., "hospital-A" / modality
-  string model_name = 3;       // e.g., "resnet18"
-  string framework = 4;        // "torch", "tf"
-  string version = 5;          // client code version
 }
 
-message TrainPlan {
-  string round_id = 1;         // e.g., "r-0007"
-  string optimizer = 2;        // "sgd", "adam"
-  float lr = 3;
-  int32 local_epochs = 4;
-  int32 batch_size = 5;
-  bool send_metrics = 6;
-}
-
-message ModelBlob {
-  bytes weights = 1;           // serialized bytes (torch.save/io.BytesIO) or npz
-  string format = 2;           // "torch_state_dict", "numpy_npz"
-}
-
-message PullGlobalRequest {
-  ClientInfo client = 1;
-  string round_id = 2;
-}
-
-message PullGlobalResponse {
-  ModelBlob global_model = 1;
-  TrainPlan plan = 2;
-}
-
-message LocalUpdate {
-  ClientInfo client = 1;
-  string round_id = 2;
-  ModelBlob update = 3;        // either full weights or delta
-  int64 num_samples = 4;       // for weighted FedAvg
-  string metric_json = 5;      // optional {"loss":..., "acc":...}
-}
-
-message Ack {
-  string round_id = 1;
-  string status = 2;           // "OK" | "ERROR"
-  string message = 3;
-}
-
-message Chunk {
-  string round_id = 1;
-  string client_id = 2;
-  int32 seq = 3;
-  bytes data = 4;
-  bool last = 5;
-}
-
-// Service
-service Federated {
-  // Small/medium models (simple path)
-  rpc PullGlobal (PullGlobalRequest) returns (PullGlobalResponse);
-  rpc PushUpdate (LocalUpdate) returns (Ack);
-
-  // Large models (chunked streaming path)
-  rpc PullGlobalStream (PullGlobalRequest) returns (stream Chunk);
-  rpc PushUpdateStream (stream Chunk) returns (Ack);
-
-  // Health/heartbeat
-  rpc Heartbeat (ClientInfo) returns (Ack);
+message ServerStatus {
+  string status       = 1;   // idle | waiting | aggregating | done
+  int32  round        = 2;
+  int32  n_clients    = 3;
+  int32  min_clients  = 4;
+  string strategy     = 5;
+  bool   secure_agg   = 6;
+  bool   dp_enabled   = 7;
 }

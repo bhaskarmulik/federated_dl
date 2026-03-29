@@ -3,9 +3,9 @@ picograd/ops/pooling.py
 ========================
 2D pooling operations.
 
-MaxPool2d  — stores argmax indices for backward (gradient routing)
-AvgPool2d  — distributes gradient equally over pooling window
-AdaptiveAvgPool2d — computes dynamic kernel_size from target output size
+MaxPool2d  -- stores argmax indices for backward (gradient routing)
+AvgPool2d  -- distributes gradient equally over pooling window
+AdaptiveAvgPool2d -- computes dynamic kernel_size from target output size
 """
 
 from __future__ import annotations
@@ -67,7 +67,7 @@ class MaxPool2d(Function):
         N_, C_, H_out, W_out = grad.shape
         for i in range(H_out):
             for j in range(W_out):
-                ih = idx_h[:, :, i, j]   # (N, C) — valid x indices
+                ih = idx_h[:, :, i, j]   # (N, C) -- valid x indices
                 iw = idx_w[:, :, i, j]
                 for n in range(N):
                     for c in range(C):

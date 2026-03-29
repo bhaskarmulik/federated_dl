@@ -1,8 +1,9 @@
+# -*- coding: utf-8 -*-
 """
 tests/test_privacy.py
 ======================
 Tests for Module 5: Privacy & Security.
-Covers all verification criteria from FALCON_Project_Plan.md §Module 5.
+Covers all verification criteria from FALCON_Project_Plan.md Module 5.
 """
 
 import sys, os
@@ -22,9 +23,9 @@ def assert_close(a, b, atol=1e-5, msg=""):
     assert diff < atol, f"{msg} | diff={diff:.2e}"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 1.  DPOptimizer — gradient clipping
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# 1.  DPOptimizer -- gradient clipping
+# -----------------------------------------------------------------------------
 
 def test_dp_gradient_clipping():
     """After DP step, no gradient L2 norm exceeds max_grad_norm."""
@@ -36,7 +37,7 @@ def test_dp_gradient_clipping():
     for p in model.parameters():
         p.grad = Tensor(np.random.randn(*p.shape).astype(np.float32) * 100.0)
 
-    base_opt  = optim.SGD(list(model.parameters()), lr=0.0)   # lr=0 → no update, just clip
+    base_opt  = optim.SGD(list(model.parameters()), lr=0.0)   # lr=0 -> no update, just clip
     dp_opt    = DPOptimizer(
         base_opt,
         noise_multiplier=0.0,      # no noise, test clipping only
@@ -55,35 +56,35 @@ def test_dp_gradient_clipping():
             assert l2 <= max_grad_norm * 1.01, \
                 f"Clipped grad norm {l2:.4f} > C={max_grad_norm}"
 
-    print("  ✓ DPOptimizer: clipping — all param grad norms ≤ max_grad_norm")
+    print("  [PASS] DPOptimizer: clipping -- all param grad norms <= max_grad_norm")
 
 
 def test_dp_noise_injection():
-    """Noise variance ≈ (σ·C)²  for 1000 independent runs (statistical test)."""
+    """Noise variance ~ (sigma*C)^2  for 1000 independent runs (statistical test)."""
     manual_seed(42)
-    σ = 1.0
+    sigma = 1.0
     C = 1.0
-    expected_var = (σ * C) ** 2
+    expected_var = (sigma * C) ** 2
     noise_samples = []
 
     for _ in range(1000):
         p = picograd.nn.parameter.Parameter(np.zeros(1, dtype=np.float32))
-        p.grad = Tensor(np.zeros(1, dtype=np.float32))   # zero gradient → output is pure noise / bs
+        p.grad = Tensor(np.zeros(1, dtype=np.float32))   # zero gradient -> output is pure noise / bs
 
         base = optim.SGD([p], lr=0.0)
-        dp   = DPOptimizer(base, noise_multiplier=σ, max_grad_norm=C,
+        dp   = DPOptimizer(base, noise_multiplier=sigma, max_grad_norm=C,
                            batch_size=1, dataset_size=1000)
         dp.step()
-        # grad after step = (0 + noise) / batch_size=1 → noise value
+        # grad after step = (0 + noise) / batch_size=1 -> noise value
         noise_samples.append(float(p.grad._data[0]) if p.grad else 0.0)
 
     # Actually DPOptimizer modifies p._data not p.grad; let's sample noise from grad
-    # The noise added is N(0, σ²C²). After div by bs=1, output is N(0, σ²C²)
+    # The noise added is N(0, sigma^2C^2). After div by bs=1, output is N(0, sigma^2C^2)
     noise_arr = np.array(noise_samples)
     measured_var = float(np.var(noise_arr))
     rel_err = abs(measured_var - expected_var) / expected_var
     assert rel_err < 0.3, f"Noise variance {measured_var:.3f} vs expected {expected_var:.3f}"
-    print(f"  ✓ DPOptimizer: noise variance ≈ {measured_var:.3f} (expected {expected_var:.3f})")
+    print(f"  [PASS] DPOptimizer: noise variance ~ {measured_var:.3f} (expected {expected_var:.3f})")
 
 
 def test_dp_optimizer_trains():
@@ -109,16 +110,16 @@ def test_dp_optimizer_trains():
 
     # Loss should decrease (on average, even with noise)
     assert losses[-1] < losses[0], \
-        f"DP training didn't decrease loss: {losses[0]:.4f} → {losses[-1]:.4f}"
-    print(f"  ✓ DPOptimizer: training loss decreases {losses[0]:.4f}→{losses[-1]:.4f}")
+        f"DP training didn't decrease loss: {losses[0]:.4f} -> {losses[-1]:.4f}"
+    print(f"  [PASS] DPOptimizer: training loss decreases {losses[0]:.4f}->{losses[-1]:.4f}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 2.  RDPAccountant — privacy budget tracking
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# 2.  RDPAccountant -- privacy budget tracking
+# -----------------------------------------------------------------------------
 
 def test_rdp_epsilon_increases():
-    """ε increases monotonically with each round."""
+    """epsilon increases monotonically with each round."""
     accountant   = RDPAccountant()
     sample_rate  = 0.01
     noise_mult   = 1.0
@@ -131,22 +132,22 @@ def test_rdp_epsilon_increases():
     # Must be strictly non-decreasing
     for i in range(1, len(epsilons)):
         assert epsilons[i] >= epsilons[i-1] - 1e-9, \
-            f"ε not monotone at step {i}: {epsilons[i-1]:.4f} → {epsilons[i]:.4f}"
-    print(f"  ✓ RDPAccountant: ε monotonically increases over 50 rounds "
-          f"({epsilons[0]:.3f}→{epsilons[-1]:.3f})")
+            f"epsilon not monotone at step {i}: {epsilons[i-1]:.4f} -> {epsilons[i]:.4f}"
+    print(f"  [PASS] RDPAccountant: epsilon monotonically increases over 50 rounds "
+          f"({epsilons[0]:.3f}->{epsilons[-1]:.3f})")
 
 
 def test_rdp_epsilon_bound():
     """
-    For σ=1.0, C=1.0, 100 rounds, δ=1e-5, ε should be in range [5, 20].
+    For sigma=1.0, C=1.0, 100 rounds, delta=1e-5, epsilon should be in range [5, 20].
     (Known empirical range for these parameters.)
     """
     accountant = RDPAccountant()
     for _ in range(100):
         accountant.step(noise_multiplier=1.0, sample_rate=0.01)
     eps = accountant.get_epsilon(delta=1e-5)
-    assert 0.5 < eps < 15, f"ε={eps:.3f} outside expected range (0.5, 15)"
-    print(f"  ✓ RDPAccountant: ε={eps:.3f} for σ=1.0, 100 rounds, δ=1e-5 (in [0.5,15])")
+    assert 0.5 < eps < 15, f"epsilon={eps:.3f} outside expected range (0.5, 15)"
+    print(f"  [PASS] RDPAccountant: epsilon={eps:.3f} for sigma=1.0, 100 rounds, delta=1e-5 (in [0.5,15])")
 
 
 def test_rdp_reset():
@@ -159,12 +160,12 @@ def test_rdp_reset():
     for _ in range(10):
         accountant.step(1.0, 0.01)
     eps_after = accountant.get_epsilon(1e-5)
-    assert_close(eps_before, eps_after, atol=1e-6, msg="reset+redo gives same ε")
-    print("  ✓ RDPAccountant: reset + replay gives same ε")
+    assert_close(eps_before, eps_after, atol=1e-6, msg="reset+redo gives same epsilon")
+    print("  [PASS] RDPAccountant: reset + replay gives same epsilon")
 
 
 def test_rdp_integrated_with_dp_optimizer():
-    """DPOptimizer + RDPAccountant integration: ε tracked per step."""
+    """DPOptimizer + RDPAccountant integration: epsilon tracked per step."""
     manual_seed(5)
     accountant = RDPAccountant()
     p  = picograd.nn.parameter.Parameter(np.zeros(4, dtype=np.float32))
@@ -178,19 +179,19 @@ def test_rdp_integrated_with_dp_optimizer():
     assert accountant.num_steps == 20
     eps = accountant.get_epsilon(1e-5)
     assert eps > 0 and np.isfinite(eps)
-    print(f"  ✓ DPOptimizer+RDPAccountant: 20 steps → ε={eps:.4f}")
+    print(f"  [PASS] DPOptimizer+RDPAccountant: 20 steps -> epsilon={eps:.4f}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # 3.  Secure Aggregation
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 def test_mask_cancellation_5_clients():
     """Sum of all client masks equals zero (fundamental correctness)."""
     shapes = {"linear.weight": (10, 5), "linear.bias": (10,)}
     ok = verify_mask_cancellation(n_clients=5, shapes=shapes, round_id=0)
-    assert ok, "Mask cancellation failed: Σ masks ≠ 0"
-    print("  ✓ Secure aggregation: Σ r_i = 0 for 5 clients (mask cancellation)")
+    assert ok, "Mask cancellation failed: Sigma masks != 0"
+    print("  [PASS] Secure aggregation: Sigma r_i = 0 for 5 clients (mask cancellation)")
 
 
 def test_mask_cancellation_3_and_10_clients():
@@ -199,7 +200,7 @@ def test_mask_cancellation_3_and_10_clients():
     for n in [3, 7, 10]:
         ok = verify_mask_cancellation(n_clients=n, shapes=shapes)
         assert ok, f"Mask cancellation failed for {n} clients"
-    print("  ✓ Mask cancellation holds for 3, 7, 10 clients")
+    print("  [PASS] Mask cancellation holds for 3, 7, 10 clients")
 
 
 def test_secure_aggregation_equals_fedavg():
@@ -218,7 +219,7 @@ def test_secure_aggregation_equals_fedavg():
         for _ in range(n_clients)
     ]
 
-    # Masked updates — clients pre-weight by n_i/total before masking
+    # Masked updates -- clients pre-weight by n_i/total before masking
     total = sum(sample_counts)
     updates_masked = []
     for i in range(n_clients):
@@ -242,7 +243,7 @@ def test_secure_aggregation_equals_fedavg():
                              plain_result[k].astype(np.float64)))
         assert diff < 1e-3, f"SecureAgg vs FedAvg diff={diff:.2e} for key {k}"
 
-    print("  ✓ Secure aggregation == FedAvg (masks cancel correctly)")
+    print("  [PASS] Secure aggregation == FedAvg (masks cancel correctly)")
 
 
 def test_server_cannot_see_individual_updates():
@@ -255,13 +256,13 @@ def test_server_cannot_see_individual_updates():
     gen    = MaskGenerator(client_id=0, n_clients=3, round_id=0)
     masked = gen.mask_update(update, shapes)
     diff   = np.max(np.abs(masked["w"] - update["w"]))
-    assert diff > 0.01, "Masked update is identical to plaintext — mask not applied!"
-    print("  ✓ Masked update ≠ plaintext (server cannot see individual update)")
+    assert diff > 0.01, "Masked update is identical to plaintext -- mask not applied!"
+    print("  [PASS] Masked update != plaintext (server cannot see individual update)")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Runner
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 if __name__ == "__main__":
     tests = [
@@ -283,11 +284,11 @@ if __name__ == "__main__":
         try:
             t(); passed += 1
         except Exception as e:
-            print(f"  ✗ {t.__name__}: {e}")
+            print(f"  [FAIL] {t.__name__}: {e}")
             import traceback; traceback.print_exc()
             failed += 1
     print(f"\n{'='*60}")
     print(f"Results: {passed}/{passed+failed} passed  "
-          f"{'✓ ALL PASS' if failed==0 else f'✗ {failed} FAILED'}")
+          f"{'[PASS] ALL PASS' if failed==0 else f'[FAIL] {failed} FAILED'}")
     print('='*60)
     if failed: sys.exit(1)

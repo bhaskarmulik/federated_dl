@@ -3,9 +3,9 @@ picograd/models/anomaly_ae.py
 ==============================
 CNN-Autoencoder for reconstruction-error-based anomaly detection.
 
-Architecture (for 28×28 grayscale input):
-  Encoder:  Conv→BN→ReLU (×3, strided) → Flatten → Linear → latent
-  Decoder:  Linear → Reshape → ConvTranspose→BN→ReLU (×2) → ConvTranspose → Sigmoid
+Architecture (for 28x28 grayscale input):
+  Encoder:  Conv->BN->ReLU (x3, strided) -> Flatten -> Linear -> latent
+  Decoder:  Linear -> Reshape -> ConvTranspose->BN->ReLU (x2) -> ConvTranspose -> Sigmoid
 
 Training:  On "normal" samples only.  Loss = MSELoss(input, reconstruction).
 Inference: anomaly_score = mean(reconstruction_error_per_pixel).
@@ -81,7 +81,7 @@ class AnomalyAE(Module):
     """
     Full CNN-Autoencoder for anomaly detection.
 
-    Input:  (N, C, H, W)  — normalised to [0,1]
+    Input:  (N, C, H, W)  -- normalised to [0,1]
     Output: reconstruction (N, C, H, W)
     """
 
@@ -174,9 +174,9 @@ class AnomalyDetector:
     def predict(self, x: Tensor) -> Tuple[float, np.ndarray, np.ndarray]:
         """
         Returns:
-          anomaly_score : float — mean reconstruction MSE
-          reconstruction: np.ndarray — reconstructed image
-          error_map     : np.ndarray — per-pixel squared error
+          anomaly_score : float -- mean reconstruction MSE
+          reconstruction: np.ndarray -- reconstructed image
+          error_map     : np.ndarray -- per-pixel squared error
         """
         self.model.eval()
         with picograd.no_grad():

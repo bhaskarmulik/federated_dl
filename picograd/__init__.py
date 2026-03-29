@@ -1,5 +1,5 @@
 """
-picograd — A from-scratch deep learning framework with DAG-based autograd.
+picograd -- A from-scratch deep learning framework with DAG-based autograd.
 
 Public API surface mirrors PyTorch where possible for easy porting.
 
@@ -32,7 +32,7 @@ from picograd import nn
 from picograd import optim
 from picograd import data
 
-# Functional helpers — commonly used ops accessible at top level
+# Functional helpers -- commonly used ops accessible at top level
 import numpy as np
 
 

@@ -1,8 +1,8 @@
 """
 picograd/ops/convolution.py
 ============================
-Conv2d  — im2col based (fast, BLAS-accelerated)
-ConvTranspose2d — direct scatter-based (correct)
+Conv2d  -- im2col based (fast, BLAS-accelerated)
+ConvTranspose2d -- direct scatter-based (correct)
 """
 from __future__ import annotations
 import numpy as np
@@ -10,9 +10,9 @@ from picograd.autograd.function import Function, Context, Node
 from picograd.backend import get_backend
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Helpers
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 def _conv2d_output_size(H, W, kH, kW, stride, padding, dilation=1):
     H_out = (H + 2*padding - dilation*(kH-1) - 1)//stride + 1
@@ -21,7 +21,7 @@ def _conv2d_output_size(H, W, kH, kW, stride, padding, dilation=1):
 
 
 def im2col(x, kH, kW, stride=1, padding=0, dilation=1):
-    """(N,C,H,W) → (N, C*kH*kW, H_out*W_out)"""
+    """(N,C,H,W) -> (N, C*kH*kW, H_out*W_out)"""
     N, C, H, W = x.shape
     H_out, W_out = _conv2d_output_size(H, W, kH, kW, stride, padding, dilation)
     if padding > 0:
@@ -38,7 +38,7 @@ def im2col(x, kH, kW, stride=1, padding=0, dilation=1):
 
 
 def col2im(col, input_shape, kH, kW, stride=1, padding=0, dilation=1):
-    """(N, C*kH*kW, H_out*W_out) → (N,C,H,W)"""
+    """(N, C*kH*kW, H_out*W_out) -> (N,C,H,W)"""
     N, C, H, W = input_shape
     H_out, W_out = _conv2d_output_size(H, W, kH, kW, stride, padding, dilation)
     H_pad = H + 2*padding
@@ -55,9 +55,9 @@ def col2im(col, input_shape, kH, kW, stride=1, padding=0, dilation=1):
     return x_pad
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Conv2d
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 class Conv2d(Function):
     @staticmethod
@@ -120,9 +120,9 @@ class Conv2d(Function):
         return out
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ConvTranspose2d — clean scatter-based implementation
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# ConvTranspose2d -- clean scatter-based implementation
+# -----------------------------------------------------------------------------
 
 class ConvTranspose2d(Function):
     """
@@ -159,7 +159,7 @@ class ConvTranspose2d(Function):
                         ow = iw * stride + ow_start
                         if ow < 0 or ow >= W_out:
                             continue
-                        # x[:,ic,ih,iw] @ weight[ic,:,ki,kj] → out[:,oc,oh,ow]
+                        # x[:,ic,ih,iw] @ weight[ic,:,ki,kj] -> out[:,oc,oh,ow]
                         # out: (N,C_out) += (N,C_in) @ (C_in, C_out)
                         out[:, :, oh, ow] += x[:, :, ih, iw] @ weight[:, :, ki, kj]
 

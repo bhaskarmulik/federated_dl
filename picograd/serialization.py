@@ -3,7 +3,7 @@ picograd/serialization.py
 ==========================
 save() / load() for picograd state dicts.
 
-A state_dict is a dict[str, np.ndarray] — exactly what the existing
+A state_dict is a dict[str, np.ndarray] -- exactly what the existing
 FL pipeline's sd_to_bytes / bytes_to_sd pattern expects.
 """
 
@@ -27,14 +27,14 @@ def load(path: str) -> Any:
 
 
 def state_dict_to_bytes(sd: Dict[str, np.ndarray]) -> bytes:
-    """Serialize state_dict → bytes (for gRPC transmission)."""
+    """Serialize state_dict -> bytes (for gRPC transmission)."""
     buf = io.BytesIO()
     pickle.dump(sd, buf, protocol=pickle.HIGHEST_PROTOCOL)
     return buf.getvalue()
 
 
 def bytes_to_state_dict(data: bytes) -> Dict[str, np.ndarray]:
-    """Deserialize bytes → state_dict."""
+    """Deserialize bytes -> state_dict."""
     return pickle.loads(data)
 
 

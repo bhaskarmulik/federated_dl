@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 tests/test_models_fl.py
 ========================
@@ -25,18 +26,18 @@ def assert_close(a, b, atol=1e-4, msg=""):
     assert diff < atol, f"{msg} | max_diff={diff:.2e}"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# MODULE 6A — AnomalyAE architecture
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# MODULE 6A -- AnomalyAE architecture
+# -----------------------------------------------------------------------------
 
 def test_anomaly_ae_forward_shape():
-    """AnomalyAE input/output shape: (N,1,28,28)→(N,1,28,28)."""
+    """AnomalyAE input/output shape: (N,1,28,28)->(N,1,28,28)."""
     manual_seed(0)
     model = AnomalyAE(in_channels=1, latent_dim=32)
     x     = Tensor(np.random.randn(2, 1, 28, 28).astype(np.float32))
     recon = model(x)
     assert recon.shape == (2, 1, 28, 28), f"shape: {recon.shape}"
-    print("  ✓ AnomalyAE forward: (2,1,28,28)→(2,1,28,28)")
+    print("  [PASS] AnomalyAE forward: (2,1,28,28)->(2,1,28,28)")
 
 
 def test_anomaly_ae_output_range():
@@ -48,7 +49,7 @@ def test_anomaly_ae_output_range():
     vals  = recon.numpy()
     assert vals.min() >= -1e-5 and vals.max() <= 1.0 + 1e-5, \
         f"Recon range [{vals.min():.3f}, {vals.max():.3f}] not in [0,1]"
-    print(f"  ✓ AnomalyAE output in [0,1]: [{vals.min():.3f},{vals.max():.3f}]")
+    print(f"  [PASS] AnomalyAE output in [0,1]: [{vals.min():.3f},{vals.max():.3f}]")
 
 
 def test_anomaly_ae_backward():
@@ -64,7 +65,7 @@ def test_anomaly_ae_backward():
     # Check at least one parameter got a gradient
     grads = [p.grad for p in model.parameters() if p.grad is not None]
     assert len(grads) > 0, "No gradients after backward"
-    print(f"  ✓ AnomalyAE backward: loss={loss.item():.6f}, {len(grads)} params have grad")
+    print(f"  [PASS] AnomalyAE backward: loss={loss.item():.6f}, {len(grads)} params have grad")
 
 
 def test_anomaly_ae_loss_decreases():
@@ -85,8 +86,8 @@ def test_anomaly_ae_loss_decreases():
         losses.append(loss.item())
 
     assert losses[-1] < losses[0], \
-        f"Loss didn't decrease: {losses[0]:.4f}→{losses[-1]:.4f}"
-    print(f"  ✓ AnomalyAE trains: loss {losses[0]:.4f}→{losses[-1]:.4f}")
+        f"Loss didn't decrease: {losses[0]:.4f}->{losses[-1]:.4f}"
+    print(f"  [PASS] AnomalyAE trains: loss {losses[0]:.4f}->{losses[-1]:.4f}")
 
 
 def test_anomaly_detector_predict():
@@ -102,7 +103,7 @@ def test_anomaly_detector_predict():
     assert isinstance(score, float) and score >= 0
     assert recon.shape == (1, 1, 28, 28)
     assert err_map.shape == (1, 1, 28, 28)
-    print(f"  ✓ AnomalyDetector.predict: score={score:.4f}, shapes correct")
+    print(f"  [PASS] AnomalyDetector.predict: score={score:.4f}, shapes correct")
 
 
 def test_state_dict_serialization():
@@ -118,12 +119,12 @@ def test_state_dict_serialization():
     for name, p in model.named_parameters():
         assert_close(p.numpy(), np.zeros_like(p.numpy()),
                      atol=1e-5, msg=f"load_state_dict key {name}")
-    print("  ✓ AnomalyAE state_dict save/load roundtrip")
+    print("  [PASS] AnomalyAE state_dict save/load roundtrip")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# MODULE 6B — Grad-CAM
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# MODULE 6B -- Grad-CAM
+# -----------------------------------------------------------------------------
 
 def test_gradcam_output_shape():
     """GradCAM heatmap shape = input spatial dims."""
@@ -133,7 +134,7 @@ def test_gradcam_output_shape():
     x     = Tensor(np.random.rand(1, 1, 28, 28).astype(np.float32))
     heatmap = gcam.compute(x)
     assert heatmap.shape == (28, 28), f"heatmap shape {heatmap.shape}"
-    print(f"  ✓ GradCAM heatmap shape: (28,28)")
+    print(f"  [PASS] GradCAM heatmap shape: (28,28)")
 
 
 def test_gradcam_values_in_01():
@@ -145,7 +146,7 @@ def test_gradcam_values_in_01():
     heatmap = gcam.compute(x)
     assert heatmap.min() >= -1e-5 and heatmap.max() <= 1.0 + 1e-5, \
         f"heatmap range [{heatmap.min():.3f},{heatmap.max():.3f}]"
-    print(f"  ✓ GradCAM values in [0,1]: max={heatmap.max():.3f}")
+    print(f"  [PASS] GradCAM values in [0,1]: max={heatmap.max():.3f}")
 
 
 def test_gradcam_overlay():
@@ -155,12 +156,12 @@ def test_gradcam_overlay():
     overlay = GradCAMOverlay.overlay(image, heatmap, alpha=0.5)
     assert overlay.shape == (28, 28, 3)
     assert overlay.min() >= 0 and overlay.max() <= 1.0
-    print("  ✓ GradCAM overlay produces (28,28,3) RGB in [0,1]")
+    print("  [PASS] GradCAM overlay produces (28,28,3) RGB in [0,1]")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# MODULE 7A — FedAvg aggregation
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# MODULE 7A -- FedAvg aggregation
+# -----------------------------------------------------------------------------
 
 def test_fedavg_correctness():
     """FedAvg weighted average is mathematically correct."""
@@ -169,7 +170,7 @@ def test_fedavg_correctness():
     result = fedavg([sd1, sd2], [100, 300])   # weights: 0.25, 0.75
     expected = 0.25 * np.array([1,2]) + 0.75 * np.array([3,4])
     assert_close(result["w"], expected, atol=1e-5, msg="fedavg weighted avg")
-    print("  ✓ FedAvg: weighted average is correct")
+    print("  [PASS] FedAvg: weighted average is correct")
 
 
 def test_fedavg_equal_weights():
@@ -177,7 +178,7 @@ def test_fedavg_equal_weights():
     sds = [{"w": np.array([float(i)], dtype=np.float32)} for i in range(4)]
     result = fedavg(sds, [1, 1, 1, 1])
     assert_close(result["w"], [1.5], atol=1e-5, msg="fedavg equal weights")
-    print("  ✓ FedAvg: equal weights → arithmetic mean")
+    print("  [PASS] FedAvg: equal weights -> arithmetic mean")
 
 
 def test_fedavg_delta():
@@ -186,9 +187,9 @@ def test_fedavg_delta():
     updates   = [{"w": np.ones(4, dtype=np.float32) * float(i+1)}
                  for i in range(3)]
     result    = fedavg_delta(global_sd, updates, [1, 1, 1], lr=1.0)
-    # avg delta = (1+2+3)/3 = 2.0, applied to global_sd=0 → result=2.0
+    # avg delta = (1+2+3)/3 = 2.0, applied to global_sd=0 -> result=2.0
     assert_close(result["w"], np.full(4, 2.0), atol=1e-5, msg="fedavg_delta")
-    print("  ✓ fedavg_delta: global += avg(client_delta)")
+    print("  [PASS] fedavg_delta: global += avg(client_delta)")
 
 
 def test_fedavg_convergence():
@@ -197,12 +198,12 @@ def test_fedavg_convergence():
     sds = [{"w": w.copy()} for _ in range(5)]
     result = fedavg(sds, [10]*5)
     assert_close(result["w"], w, atol=1e-5, msg="fedavg identical clients")
-    print("  ✓ FedAvg: identical clients → exact reproduction")
+    print("  [PASS] FedAvg: identical clients -> exact reproduction")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# MODULE 7B — Data partitioning (non-IID)
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# MODULE 7B -- Data partitioning (non-IID)
+# -----------------------------------------------------------------------------
 
 def test_dirichlet_partition_coverage():
     """All samples assigned (no sample lost)."""
@@ -211,11 +212,11 @@ def test_dirichlet_partition_coverage():
     parts  = dirichlet_partition(labels, n_clients=5, alpha=0.5)
     total  = sum(len(p) for p in parts)
     assert total == 1000, f"only {total}/1000 samples assigned"
-    print(f"  ✓ Dirichlet partition: all 1000 samples assigned across 5 clients")
+    print(f"  [PASS] Dirichlet partition: all 1000 samples assigned across 5 clients")
 
 
 def test_dirichlet_noniid_alpha():
-    """Low α → more non-IID (higher variance in class distribution)."""
+    """Low alpha -> more non-IID (higher variance in class distribution)."""
     np.random.seed(0)
     labels = np.random.randint(0, 10, 2000)
 
@@ -230,9 +231,9 @@ def test_dirichlet_noniid_alpha():
     var_iid    = class_var(parts_iid)
     var_noniid = class_var(parts_noniid)
     assert var_noniid > var_iid, \
-        f"α=0.1 should be more non-IID than α=100: {var_noniid:.4f} vs {var_iid:.4f}"
-    print(f"  ✓ Dirichlet: α=0.1 more non-IID (var={var_noniid:.3f}) "
-          f"than α=100 (var={var_iid:.3f})")
+        f"alpha=0.1 should be more non-IID than alpha=100: {var_noniid:.4f} vs {var_iid:.4f}"
+    print(f"  [PASS] Dirichlet: alpha=0.1 more non-IID (var={var_noniid:.3f}) "
+          f"than alpha=100 (var={var_iid:.3f})")
 
 
 def test_pathological_partition():
@@ -244,16 +245,16 @@ def test_pathological_partition():
     # All samples assigned
     total = sum(len(p) for p in parts)
     assert total > 0
-    print(f"  ✓ Pathological partition: 5 clients, {total} samples assigned")
+    print(f"  [PASS] Pathological partition: 5 clients, {total} samples assigned")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# MODULE 7C — End-to-end federated learning round
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# MODULE 7C -- End-to-end federated learning round
+# -----------------------------------------------------------------------------
 
 def test_fl_round_loss_decreases():
     """
-    Full FL round: global model → distribute → local train → fedavg → loss decreases.
+    Full FL round: global model -> distribute -> local train -> fedavg -> loss decreases.
     Uses a small MLP on random data (fast, no conv overhead).
     """
     manual_seed(42)
@@ -312,13 +313,13 @@ def test_fl_round_loss_decreases():
 
     last_loss = eval_loss(global_model, X_eval, Y_eval)
     assert last_loss < first_loss, \
-        f"FL round: loss should decrease: {first_loss:.4f} → {last_loss:.4f}"
-    print(f"  ✓ FL end-to-end ({N_CLIENTS} clients, {ROUNDS} rounds): "
-          f"loss {first_loss:.4f}→{last_loss:.4f}")
+        f"FL round: loss should decrease: {first_loss:.4f} -> {last_loss:.4f}"
+    print(f"  [PASS] FL end-to-end ({N_CLIENTS} clients, {ROUNDS} rounds): "
+          f"loss {first_loss:.4f}->{last_loss:.4f}")
 
 
 def test_fl_with_dp():
-    """FL round with DPOptimizer — verifies DP doesn't break training."""
+    """FL round with DPOptimizer -- verifies DP doesn't break training."""
     manual_seed(10)
     from picograd.privacy import DPOptimizer, RDPAccountant
 
@@ -357,12 +358,12 @@ def test_fl_with_dp():
 
     eps = accountant.get_epsilon(1e-5)
     assert np.isfinite(eps) and eps > 0
-    print(f"  ✓ FL + DP: 3 rounds, ε={eps:.3f}, training runs without error")
+    print(f"  [PASS] FL + DP: 3 rounds, epsilon={eps:.3f}, training runs without error")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Runner
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 if __name__ == "__main__":
     tests = [
@@ -391,11 +392,11 @@ if __name__ == "__main__":
         try:
             t(); passed += 1
         except Exception as e:
-            print(f"  ✗ {t.__name__}: {e}")
+            print(f"  [FAIL] {t.__name__}: {e}")
             import traceback; traceback.print_exc()
             failed += 1
     print(f"\n{'='*60}")
     print(f"Results: {passed}/{passed+failed} passed  "
-          f"{'✓ ALL PASS' if failed==0 else f'✗ {failed} FAILED'}")
+          f"{'[PASS] ALL PASS' if failed==0 else f'[FAIL] {failed} FAILED'}")
     print('='*60)
     if failed: sys.exit(1)

@@ -6,7 +6,7 @@ Grad-CAM adapted for CNN-Autoencoders.
 Standard Grad-CAM: gradients of class logits w.r.t. last conv feature map.
 AE adaptation:     gradients of *reconstruction error* w.r.t. last encoder
                    conv feature map.  Highlights regions the model struggles
-                   to reconstruct — i.e., anomalous regions.
+                   to reconstruct -- i.e., anomalous regions.
 
 Reference:  Selvaraju et al., "Grad-CAM" (2017).
 """
@@ -50,18 +50,18 @@ class GradCAM:
 
         Parameters
         ----------
-        x       : input image tensor (1,C,H,W) — normalised [0,1]
+        x       : input image tensor (1,C,H,W) -- normalised [0,1]
         recon   : reconstruction (1,C,H,W).  If None, forward is re-run.
         input_size : (H,W) for upsampling.  Defaults to x.shape[-2:]
 
         Returns
         -------
-        heatmap : np.ndarray (H,W) — in [0,1], higher = more anomalous
+        heatmap : np.ndarray (H,W) -- in [0,1], higher = more anomalous
         """
         H, W = input_size or (x.shape[-2], x.shape[-1])
         model = self.model
 
-        # ── 1. Forward through encoder, capturing last conv activations ──
+        # -- 1. Forward through encoder, capturing last conv activations --
         model.train()   # ensure BN works
 
         # Run encoder up to conv3 manually, capturing activations
@@ -70,7 +70,7 @@ class GradCAM:
         # Forward with gradient tracking
         h = enc.relu1(enc.bn1(enc.conv1(x)))
         h = enc.relu2(enc.bn2(enc.conv2(h)))
-        h_conv3_in = enc.relu3(enc.bn3(enc.conv3(h)))  # (1,128,4,4) — target activation
+        h_conv3_in = enc.relu3(enc.bn3(enc.conv3(h)))  # (1,128,4,4) -- target activation
         h_conv3_in._data = h_conv3_in._data.copy()     # ensure own copy
 
         # Continue through full model
@@ -84,10 +84,10 @@ class GradCAM:
         h_d    = dec.relu2(dec.bn2(dec.deconv2(h_d)))
         recon_computed = dec.sigmoid(dec.deconv3(h_d))
 
-        # ── 2. Compute reconstruction error as scalar target ──
+        # -- 2. Compute reconstruction error as scalar target --
         err = ((x - recon_computed) ** 2).mean()
 
-        # ── 3. Backward to get gradients at conv3 output ──
+        # -- 3. Backward to get gradients at conv3 output --
         # We need dL/d(h_conv3_in).  Track h_conv3_in as a leaf.
         # Simplification: directly compute gradient of error w.r.t. feature map
         # via the autograd engine.
@@ -101,15 +101,15 @@ class GradCAM:
         else:
             grads       = h_conv3_in.grad._data[0]  # (128,4,4)
             activations = h_conv3_in._data[0]        # (128,4,4)
-            # Global Average Pool of gradients → channel weights
+            # Global Average Pool of gradients -> channel weights
             weights = grads.mean(axis=(1,2))          # (128,)
 
-        # ── 4. Weighted combination of feature maps ──
+        # -- 4. Weighted combination of feature maps --
         cam = np.zeros(activations.shape[1:], dtype=np.float32)   # (4,4)
         for i, w in enumerate(weights):
             cam += w * activations[i]
 
-        # ── 5. ReLU + normalise + upsample ──
+        # -- 5. ReLU + normalise + upsample --
         cam = np.maximum(cam, 0)
         if cam.max() > 1e-8:
             cam = cam / cam.max()
@@ -124,7 +124,7 @@ class GradCAM:
 
     @staticmethod
     def _bilinear_upsample(cam: np.ndarray, H: int, W: int) -> np.ndarray:
-        """Simple bilinear upsampling of (h,w) → (H,W)."""
+        """Simple bilinear upsampling of (h,w) -> (H,W)."""
         h, w = cam.shape
         # Use numpy zoom-like approach
         row_idx = np.linspace(0, h - 1, H)
@@ -194,11 +194,11 @@ class ExplainabilityReport:
     Generates a structured explainability report for one AE prediction.
 
     Fields:
-      original      : np.ndarray — original input image
-      reconstruction: np.ndarray — model reconstruction
-      error_map     : np.ndarray — per-pixel squared error
-      heatmap       : np.ndarray — Grad-CAM heatmap [0,1]
-      overlay       : np.ndarray — image + heatmap blend (RGB)
+      original      : np.ndarray -- original input image
+      reconstruction: np.ndarray -- model reconstruction
+      error_map     : np.ndarray -- per-pixel squared error
+      heatmap       : np.ndarray -- Grad-CAM heatmap [0,1]
+      overlay       : np.ndarray -- image + heatmap blend (RGB)
       anomaly_score : float
       threshold     : float
       is_anomalous  : bool

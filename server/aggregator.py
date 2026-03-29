@@ -104,7 +104,7 @@ class Aggregator:
             from server.strategies.fedprox_fedbn import fedbn_aggregate
             result = fedbn_aggregate(updates, counts)
         else:
-            # Plain FedAvg (also covers fedprox — client handles proximal term)
+            # Plain FedAvg (also covers fedprox -- client handles proximal term)
             result = fedavg(updates, counts)
 
         # Privacy accounting
@@ -139,7 +139,7 @@ class Aggregator:
     # ------------------------------------------------------------------ privacy reporting
 
     def get_privacy_budget(self, delta: float = 1e-5) -> Optional[Tuple[float, float]]:
-        """Return (ε, δ) spent so far, or None if no accountant."""
+        """Return (eps, delta) spent so far, or None if no accountant."""
         if self.accountant is None:
             return None
         eps = self.accountant.get_epsilon(delta)

@@ -73,7 +73,7 @@ class Sigmoid(Function):
     def backward(ctx: Context, grad):
         out, = ctx.saved_tensors
         b = get_backend()
-        # σ(1 - σ)
+        # sigma(1 - sigma)
         return (b.mul(grad, b.mul(out, b.sub(b.ones(b.shape_of(out)), out))),)
 
 
@@ -97,7 +97,7 @@ class Tanh(Function):
 
 
 class GELU(Function):
-    """Approximate GELU: 0.5 * x * (1 + tanh(√(2/π) * (x + 0.044715*x³)))"""
+    """Approximate GELU: 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715*x^3)))"""
     _SQRT2OVERPI = np.sqrt(2.0 / np.pi).astype(np.float32)
     _COEFF = np.float32(0.044715)
 

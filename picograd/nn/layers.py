@@ -38,7 +38,7 @@ class Linear(Module):
             self._no_bias = True
 
     def forward(self, x: Tensor) -> Tensor:
-        # x: (..., in_features) → (..., out_features)
+        # x: (..., in_features) -> (..., out_features)
         out = x @ self.weight.T
         if hasattr(self, 'bias'):
             out = out + self.bias

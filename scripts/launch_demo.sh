@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 cd "$ROOT"
 
-# ── Parse args ────────────────────────────────────────────────────────────
+# -- Parse args ------------------------------------------------------------
 ROUNDS=10
 N_CLIENTS=3
 DP=false
@@ -36,19 +36,19 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo ""
-echo "═══════════════════════════════════════════════"
+echo "==============================================="
 echo "  FALCON FL Demo"
-echo "═══════════════════════════════════════════════"
+echo "==============================================="
 echo "  Rounds:      $ROUNDS"
 echo "  Clients:     $N_CLIENTS"
 echo "  Strategy:    $STRATEGY"
 echo "  DP:          $DP"
 echo "  SecureAgg:   $SECURE_AGG"
-echo "  Non-IID α:   $ALPHA"
-echo "═══════════════════════════════════════════════"
+echo "  Non-IID alpha:   $ALPHA"
+echo "==============================================="
 echo ""
 
-python3 - <<PYEOF
+"$ROOT/myenv/Scripts/python.exe" - <<PYEOF
 import sys, os
 sys.path.insert(0, '$ROOT')
 import numpy as np
@@ -65,7 +65,7 @@ from falcon.data_partition import dirichlet_partition
 
 manual_seed(42)
 
-# ── Hyperparameters ───────────────────────────────────────────────────────
+# -- Hyperparameters -------------------------------------------------------
 N_ROUNDS   = $ROUNDS
 N_CLIENTS  = $N_CLIENTS
 USE_DP     = $([[ "$DP" == "true" ]] && echo "True" || echo "False")
@@ -78,30 +78,30 @@ BATCH      = 8
 LOCAL_STEPS= 5
 LR         = 1e-3
 
-print(f"  Generating synthetic 28×28 grayscale data ...")
+print(f"  Generating synthetic 28x28 grayscale data ...")
 # Synthetic "medical" data: Gaussian blobs for normal/anomalous classes
 N_TOTAL = N_CLIENTS * 200
 X_all   = np.random.randn(N_TOTAL, 1, IMG_SIZE, IMG_SIZE).astype(np.float32)
-X_all   = (X_all - X_all.min()) / (X_all.max() - X_all.min())  # → [0,1]
+X_all   = (X_all - X_all.min()) / (X_all.max() - X_all.min())  # -> [0,1]
 Y_all   = np.zeros(N_TOTAL, dtype=np.int32)
 
 # Non-IID partition
 parts = dirichlet_partition(Y_all, n_clients=N_CLIENTS, alpha=ALPHA)
 
-# ── Initialize global model ───────────────────────────────────────────────
+# -- Initialize global model -----------------------------------------------
 global_model = AnomalyAE(in_channels=1, latent_dim=LATENT_DIM)
 aggregator   = Aggregator(strategy=STRATEGY, secure_agg=USE_SECAGG)
 
 print(f"  Global model: {sum(p.numel for p in global_model.parameters())} parameters")
 print()
 
-# ── Privacy setup ─────────────────────────────────────────────────────────
+# -- Privacy setup ---------------------------------------------------------
 privacy_cfg = PrivacyConfig(noise_multiplier=1.0, max_grad_norm=1.0, enabled=USE_DP)
 accountant  = RDPAccountant() if USE_DP else None
 
-# ── Training loop ─────────────────────────────────────────────────────────
-print(f"{'Round':>6}  {'Avg Loss':>10}  {'ε':>8}  {'Clients':>8}")
-print("─" * 42)
+# -- Training loop ---------------------------------------------------------
+print(f"{'Round':>6}  {'Avg Loss':>10}  {'eps':>8}  {'Clients':>8}")
+print("-" * 42)
 
 for rnd in range(1, N_ROUNDS + 1):
     global_sd      = global_model.state_dict()
@@ -156,10 +156,10 @@ for rnd in range(1, N_ROUNDS + 1):
     print(f"{rnd:>6}  {avg_loss:>10.5f}  {eps_str:>8}  {N_CLIENTS:>8}")
 
 print()
-print("═══════════════════════════════════════════════")
+print("===============================================")
 print("  Demo complete!")
 if USE_DP:
     final_eps = accountant.get_epsilon(1e-5)
-    print(f"  Final privacy budget: ε = {final_eps:.3f} (δ = 1e-5)")
-print("═══════════════════════════════════════════════")
+    print(f"  Final privacy budget: eps = {final_eps:.3f} (delta = 1e-5)")
+print("===============================================")
 PYEOF

@@ -29,7 +29,7 @@ class Optimizer:
             self.param_groups = [{'params': list(params), **defaults}]
 
         self.defaults = defaults
-        self.state: Dict[int, Dict] = {}   # id(param) → optimizer state
+        self.state: Dict[int, Dict] = {}   # id(param) -> optimizer state
 
     def zero_grad(self) -> None:
         for group in self.param_groups:
@@ -109,7 +109,7 @@ class SGD(Optimizer):
 
 class Adam(Optimizer):
     """
-    Adam optimizer.  When weight_decay > 0 and decoupled=True → AdamW.
+    Adam optimizer.  When weight_decay > 0 and decoupled=True -> AdamW.
     """
 
     def __init__(self, params, lr: float = 1e-3,

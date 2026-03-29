@@ -4,10 +4,10 @@ server/secure_agg.py
 Masking-based Secure Aggregation for federated learning.
 
 CORRECT protocol (Bonawitz et al. 2017 simplified):
-  - Client i has sample_count n_i, total N = Σ n_j
+  - Client i has sample_count n_i, total N = Sum n_j
   - Client sends: masked_i = (n_i / N) * update_i  +  r_i
-    where Σ r_i = 0  (pairwise-cancelling masks)
-  - Server computes: Σ masked_i = Σ (n_i/N)*update_i + Σ r_i = weighted_avg_update
+    where Sum r_i = 0  (pairwise-cancelling masks)
+  - Server computes: Sum masked_i = Sum (n_i/N)*update_i + Sum r_i = weighted_avg_update
 
 This ensures masks cancel in the unweighted sum so the server
 recovers the FedAvg result without seeing individual updates.
@@ -61,8 +61,8 @@ class MaskGenerator:
     Client-side mask generation.
 
     Masks are constructed via pairwise-cancelling PRG seeds:
-      mask_i = Σ_{j>i} PRG(seed_ij) - Σ_{j<i} PRG(seed_ji)
-    → Σ_i mask_i = 0  (telescope cancellation)
+      mask_i = Sum_{j>i} PRG(seed_ij) - Sum_{j<i} PRG(seed_ji)
+    -> Sum_i mask_i = 0  (telescope cancellation)
     """
 
     def __init__(self, client_id: int, n_clients: int, round_id: int = 0):
@@ -96,11 +96,11 @@ class MaskGenerator:
         self,
         update:        StateDict,
         model_shapes:  Dict[str, tuple],
-        weight:        float = 1.0,          # n_i / N — apply before masking
+        weight:        float = 1.0,          # n_i / N -- apply before masking
     ) -> StateDict:
         """
         Returns: weight * update + mask
-        Server sums these across clients → FedAvg result (masks cancel).
+        Server sums these across clients -> FedAvg result (masks cancel).
         """
         masks = self.generate_masks(model_shapes)
         return {k: (weight * update[k]).astype(np.float32) + masks[k]
@@ -112,7 +112,7 @@ def verify_mask_cancellation(
     shapes:    Dict[str, tuple],
     round_id:  int = 0,
 ) -> bool:
-    """Confirm Σ_i mask_i = 0 (unweighted)."""
+    """Confirm Sum_i mask_i = 0 (unweighted)."""
     total: Dict[str, np.ndarray] = {k: np.zeros(s, dtype=np.float64)
                                      for k, s in shapes.items()}
     for i in range(n_clients):

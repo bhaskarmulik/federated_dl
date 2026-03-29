@@ -4,10 +4,10 @@ falcon/data_partition.py
 Non-IID data distribution for federated learning simulation.
 
 Strategies:
-  - Dirichlet(α): label distribution proportional to Dir(α) per client.
-    α → ∞ : IID
-    α = 0.5: moderate non-IID
-    α = 0.1: severe non-IID (some clients see only 1-2 classes)
+  - Dirichlet(alpha): label distribution proportional to Dir(alpha) per client.
+    alpha -> infinity : IID
+    alpha = 0.5: moderate non-IID
+    alpha = 0.1: severe non-IID (some clients see only 1-2 classes)
   - Pathological: each client gets exactly K out of C classes.
   - Quantity imbalance: clients receive different dataset sizes.
 """
@@ -120,7 +120,7 @@ def partition_stats(client_idx: List[np.ndarray],
                     labels: np.ndarray,
                     n_classes: int) -> np.ndarray:
     """
-    Return class distribution matrix (n_clients × n_classes).
+    Return class distribution matrix (n_clients x n_classes).
     Useful for visualising non-IID-ness.
     """
     dist = np.zeros((len(client_idx), n_classes), dtype=np.int32)

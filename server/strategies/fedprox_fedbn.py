@@ -5,7 +5,7 @@ FedProx: adds proximal term to client loss to reduce drift on non-IID data.
 FedBN:   clients keep local BatchNorm stats; aggregate only non-BN params.
 """
 
-# ── FedProx ─────────────────────────────────────────────────────────────────
+# -- FedProx -----------------------------------------------------------------
 
 from __future__ import annotations
 import numpy as np
@@ -16,7 +16,7 @@ StateDict = Dict[str, np.ndarray]
 
 class FedProxLoss:
     """
-    FedProx proximal term: (μ/2) * ||w - w_global||²
+    FedProx proximal term: (mu/2) * ||w - w_global||^2
     Add to client's local loss before backward.
 
     Usage:
@@ -47,7 +47,7 @@ class FedProxLoss:
         self._global = [p._data.copy() for p in global_params]
 
 
-# ── FedBN ────────────────────────────────────────────────────────────────────
+# -- FedBN --------------------------------------------------------------------
 
 def fedbn_aggregate(
     updates: List[StateDict],
@@ -56,7 +56,7 @@ def fedbn_aggregate(
     """
     FedBN: aggregate all parameters EXCEPT BatchNorm stats.
 
-    BatchNorm layers capture scanner-specific statistics — keeping them local
+    BatchNorm layers capture scanner-specific statistics -- keeping them local
     prevents domain shift between clients with different medical imaging modalities.
 
     BN keys to exclude (running_mean, running_var, weight, bias of BN layers):

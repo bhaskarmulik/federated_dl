@@ -8,7 +8,7 @@ autograd DAG via `_grad_fn`.  Leaf tensors (created by the user) have
 `_grad_fn = None` and are the targets of gradient accumulation.
 
 Design matches PyTorch's user-facing API closely so existing code is
-easy to port:  torch.Tensor → picograd.Tensor.
+easy to port:  torch.Tensor -> picograd.Tensor.
 """
 
 from __future__ import annotations

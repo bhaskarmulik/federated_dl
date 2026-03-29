@@ -4,8 +4,8 @@ picograd/ops/elemwise.py
 All elementwise differentiable operations.
 
 Every class is a Function subclass with:
-  - forward(ctx, *raw_arrays) → raw_array
-  - backward(ctx, grad_out)   → tuple of grad arrays
+  - forward(ctx, *raw_arrays) -> raw_array
+  - backward(ctx, grad_out)   -> tuple of grad arrays
 
 Broadcasting: when two tensors broadcast, the backward must sum the
 gradient over the added/expanded dimensions.  `_unbroadcast` handles this.
@@ -26,8 +26,8 @@ def _unbroadcast(grad: np.ndarray, original_shape: tuple) -> np.ndarray:
     Sum grad back to original_shape, reversing NumPy broadcasting rules.
 
     Broadcasting can:
-      a) Prepend dimensions:  (3,) + (2,3) → grad has shape (2,3), need (3,)
-      b) Expand size-1 dims:  (3,1) + (3,4) → grad has shape (3,4), need (3,1)
+      a) Prepend dimensions:  (3,) + (2,3) -> grad has shape (2,3), need (3,)
+      b) Expand size-1 dims:  (3,1) + (3,4) -> grad has shape (3,4), need (3,1)
 
     Strategy:
       1. Sum over leading dims that were prepended.
@@ -228,7 +228,7 @@ class Abs(Function):
 
 
 # ---------------------------------------------------------------------------
-# Sqrt  (√a)
+# Sqrt  (sqrta)
 # ---------------------------------------------------------------------------
 
 class Sqrt(Function):
@@ -243,7 +243,7 @@ class Sqrt(Function):
     def backward(ctx: Context, grad):
         out, = ctx.saved_tensors
         b = get_backend()
-        # d√a/da = 1/(2√a)
+        # dsqrta/da = 1/(2sqrta)
         return (b.div(grad, b.mul(b.full(b.shape_of(out), 2.0), out)),)
 
 

@@ -28,7 +28,7 @@ def gradcheck(
 
     Parameters
     ----------
-    func   : function taking picograd Tensors → scalar Tensor
+    func   : function taking picograd Tensors -> scalar Tensor
     inputs : list of Tensors with requires_grad=True
     eps    : finite difference step
     atol   : absolute tolerance
@@ -85,7 +85,7 @@ def gradcheck(
 
         ok = max_err < atol or rel_err < rtol
         if verbose:
-            status = "✓" if ok else "✗"
+            status = "[PASS]" if ok else "[FAIL]"
             print(f"  input[{i}]: max_abs_err={max_err:.2e}  rel_err={rel_err:.2e}  {status}")
         if not ok:
             passed = False

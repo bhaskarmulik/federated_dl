@@ -1,7 +1,7 @@
 """
 picograd/nn/module.py
 ======================
-Base Module class — the foundation of every neural network layer.
+Base Module class -- the foundation of every neural network layer.
 
 Mirrors PyTorch's nn.Module:
   - Parameters registered via __setattr__
@@ -21,9 +21,9 @@ class Module:
 
     def __init__(self):
         # Private storage (bypass __setattr__ to avoid infinite recursion)
-        object.__setattr__(self, '_parameters', {})   # name → Parameter
-        object.__setattr__(self, '_modules', {})       # name → Module
-        object.__setattr__(self, '_buffers', {})       # name → ndarray (non-grad)
+        object.__setattr__(self, '_parameters', {})   # name -> Parameter
+        object.__setattr__(self, '_modules', {})       # name -> Module
+        object.__setattr__(self, '_buffers', {})       # name -> ndarray (non-grad)
         object.__setattr__(self, '_training', True)
 
     # ------------------------------------------------------------------ attribute dispatch

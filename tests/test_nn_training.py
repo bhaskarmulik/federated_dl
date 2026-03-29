@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 tests/test_nn_training.py
 ==========================
@@ -19,7 +20,7 @@ def assert_close(a, b, atol=1e-4, msg=""):
     diff = np.max(np.abs(a - b))
     assert diff < atol, f"{msg} | max_diff={diff:.2e}"
 
-# ── 1. Module system ─────────────────────────────────────────────────────────
+# -- 1. Module system ---------------------------------------------------------
 
 def test_linear_forward():
     manual_seed(0)
@@ -27,7 +28,7 @@ def test_linear_forward():
     x = Tensor(np.ones((2, 4), dtype=np.float32))
     out = lin(x)
     assert out.shape == (2, 3), f"shape {out.shape}"
-    print("  ✓ Linear(4,3) forward: (2,4)→(2,3)")
+    print("  [PASS] Linear(4,3) forward: (2,4)->(2,3)")
 
 def test_linear_backward():
     manual_seed(1)
@@ -38,7 +39,7 @@ def test_linear_backward():
     assert lin.weight.grad is not None
     assert lin.bias.grad is not None
     assert lin.weight.grad.shape == lin.weight.shape
-    print("  ✓ Linear backward: weight.grad and bias.grad populated")
+    print("  [PASS] Linear backward: weight.grad and bias.grad populated")
 
 def test_sequential():
     manual_seed(2)
@@ -54,7 +55,7 @@ def test_sequential():
     params = list(model.parameters())
     assert len(params) == 4  # w1, b1, w2, b2
     assert all(p.grad is not None for p in params)
-    print("  ✓ Sequential: 3-layer MLP forward + backward")
+    print("  [PASS] Sequential: 3-layer MLP forward + backward")
 
 def test_state_dict_roundtrip():
     manual_seed(3)
@@ -65,7 +66,7 @@ def test_state_dict_roundtrip():
     # Restore
     model.load_state_dict(sd1)
     assert_close(model.weight.numpy(), sd1["weight"], msg="state_dict restore")
-    print("  ✓ state_dict save/load roundtrip")
+    print("  [PASS] state_dict save/load roundtrip")
 
 def test_train_eval_mode():
     model = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(4, 2))
@@ -78,7 +79,7 @@ def test_train_eval_mode():
     assert_close(out1.numpy(), out2.numpy(), msg="eval mode deterministic")
     model.train()
     assert model.training
-    print("  ✓ train/eval mode toggle + Dropout deterministic in eval")
+    print("  [PASS] train/eval mode toggle + Dropout deterministic in eval")
 
 def test_batchnorm2d_module():
     manual_seed(4)
@@ -88,7 +89,7 @@ def test_batchnorm2d_module():
     assert out.shape == (4, 8, 4, 4)
     out.sum().backward()
     assert bn.weight.grad is not None
-    print("  ✓ BatchNorm2d module forward + backward")
+    print("  [PASS] BatchNorm2d module forward + backward")
 
 def test_conv2d_module():
     manual_seed(5)
@@ -98,7 +99,7 @@ def test_conv2d_module():
     assert out.shape == (2, 8, 16, 16), f"shape {out.shape}"
     out.sum().backward()
     assert conv.weight.grad is not None
-    print("  ✓ Conv2d module (with padding): (2,3,16,16)→(2,8,16,16)")
+    print("  [PASS] Conv2d module (with padding): (2,3,16,16)->(2,8,16,16)")
 
 def test_zero_grad():
     manual_seed(6)
@@ -108,9 +109,9 @@ def test_zero_grad():
     assert model.weight.grad is not None
     model.zero_grad()
     assert model.weight.grad is None
-    print("  ✓ zero_grad clears all parameter gradients")
+    print("  [PASS] zero_grad clears all parameter gradients")
 
-# ── 2. Loss functions ────────────────────────────────────────────────────────
+# -- 2. Loss functions --------------------------------------------------------
 
 def test_crossentropy_loss():
     logits = Tensor(np.array([[2.0, 1.0, 0.1],
@@ -122,7 +123,7 @@ def test_crossentropy_loss():
     loss.backward()
     assert logits.grad is not None
     assert logits.grad.shape == (2, 3)
-    print(f"  ✓ CrossEntropyLoss forward={loss.item():.4f} + backward")
+    print(f"  [PASS] CrossEntropyLoss forward={loss.item():.4f} + backward")
 
 def test_mse_loss():
     pred   = Tensor(np.array([1.0, 2.0, 3.0]), requires_grad=True)
@@ -132,7 +133,7 @@ def test_mse_loss():
     assert_close(loss.item(), expected, atol=1e-5, msg="MSE value")
     loss.backward()
     assert pred.grad is not None
-    print(f"  ✓ MSELoss value={loss.item():.4f} + backward")
+    print(f"  [PASS] MSELoss value={loss.item():.4f} + backward")
 
 def test_bce_loss():
     pred   = Tensor(np.array([0.9, 0.1, 0.8]), requires_grad=True)
@@ -141,9 +142,9 @@ def test_bce_loss():
     assert loss.item() > 0
     loss.backward()
     assert pred.grad is not None
-    print(f"  ✓ BCELoss forward={loss.item():.4f} + backward")
+    print(f"  [PASS] BCELoss forward={loss.item():.4f} + backward")
 
-# ── 3. Optimizers ────────────────────────────────────────────────────────────
+# -- 3. Optimizers ------------------------------------------------------------
 
 def test_sgd_step():
     """SGD: param -= lr * grad."""
@@ -152,7 +153,7 @@ def test_sgd_step():
     opt = optim.SGD([p], lr=0.1)
     opt.step()
     assert_close(p.numpy(), [0.99, 1.98, 2.97], atol=1e-5, msg="SGD step")
-    print("  ✓ SGD step: p -= lr*grad")
+    print("  [PASS] SGD step: p -= lr*grad")
 
 def test_adam_step():
     """Adam: first step reduces param in gradient direction."""
@@ -161,9 +162,9 @@ def test_adam_step():
     p.grad = Tensor(np.ones(4, dtype=np.float32))
     opt = optim.Adam([p], lr=1e-3)
     opt.step()
-    # All params should decrease by ~lr (Adam step 1 ≈ lr * sign)
+    # All params should decrease by ~lr (Adam step 1 ~ lr * sign)
     assert np.all(p.numpy() < 0), "Adam should move params in neg-grad direction"
-    print("  ✓ Adam step: params moved in correct direction")
+    print("  [PASS] Adam step: params moved in correct direction")
 
 def test_sgd_momentum():
     """SGD with momentum accumulates velocity buffer."""
@@ -174,7 +175,7 @@ def test_sgd_momentum():
     p.grad = Tensor(np.array([1.0], dtype=np.float32))
     opt.step()  # buf=0.9+1=1.9, p = 0.9 - 0.1*1.9 = 0.71
     assert_close(p.numpy(), [0.71], atol=1e-5, msg="SGD momentum 2 steps")
-    print("  ✓ SGD with momentum accumulates velocity correctly")
+    print("  [PASS] SGD with momentum accumulates velocity correctly")
 
 def test_lr_scheduler_step():
     from picograd.optim.lr_scheduler import StepLR
@@ -188,9 +189,9 @@ def test_lr_scheduler_step():
     assert_close(opt.param_groups[0]['lr'], 0.05, atol=1e-6, msg="StepLR after 2 steps")
     sched.step(); sched.step()  # steps 3,4
     assert_close(opt.param_groups[0]['lr'], 0.025, atol=1e-6, msg="StepLR after 4 steps")
-    print("  ✓ StepLR halves lr every 2 steps")
+    print("  [PASS] StepLR halves lr every 2 steps")
 
-# ── 4. DataLoader ────────────────────────────────────────────────────────────
+# -- 4. DataLoader ------------------------------------------------------------
 
 def test_dataloader_batching():
     x = np.random.randn(100, 4).astype(np.float32)
@@ -201,7 +202,7 @@ def test_dataloader_batching():
     assert len(batches) == 7  # ceil(100/16)
     assert batches[0][0].shape == (16, 4)
     assert batches[-1][0].shape == (4, 4)   # last batch 100%16=4
-    print("  ✓ DataLoader: correct batch sizes and count")
+    print("  [PASS] DataLoader: correct batch sizes and count")
 
 def test_dataloader_shuffle():
     x = np.arange(20, dtype=np.float32).reshape(20,1)
@@ -214,10 +215,10 @@ def test_dataloader_shuffle():
     dl2 = DataLoader(ds, batch_size=20, shuffle=True)
     b2 = next(iter(dl2))[0].numpy().flatten()
     assert not np.all(b1 == np.arange(20)), "shuffled should not be sorted"
-    assert_close(b1, b2, msg="same seed → same shuffle")
-    print("  ✓ DataLoader shuffle: reproducible with same seed")
+    assert_close(b1, b2, msg="same seed -> same shuffle")
+    print("  [PASS] DataLoader shuffle: reproducible with same seed")
 
-# ── 5. End-to-end: train MLP on XOR ─────────────────────────────────────────
+# -- 5. End-to-end: train MLP on XOR -----------------------------------------
 
 def test_e2e_mlp_xor():
     """Train a 2-layer MLP to solve XOR. Loss must decrease significantly."""
@@ -246,11 +247,11 @@ def test_e2e_mlp_xor():
         losses.append(loss.item())
 
     assert losses[-1] < losses[0] * 0.3, \
-        f"Loss did not decrease enough: {losses[0]:.4f}→{losses[-1]:.4f}"
-    print(f"  ✓ MLP XOR: loss {losses[0]:.4f}→{losses[-1]:.4f} (>70% reduction)")
+        f"Loss did not decrease enough: {losses[0]:.4f}->{losses[-1]:.4f}"
+    print(f"  [PASS] MLP XOR: loss {losses[0]:.4f}->{losses[-1]:.4f} (>70% reduction)")
 
 def test_e2e_cnn_mnist_like():
-    """Tiny CNN on random 28×28 data — verify loss decreases."""
+    """Tiny CNN on random 28x28 data -- verify loss decreases."""
     manual_seed(7)
     N = 32
     X = np.random.randn(N, 1, 14, 14).astype(np.float32)
@@ -278,9 +279,9 @@ def test_e2e_cnn_mnist_like():
 
     # Just verify it runs without error and produces a scalar loss
     assert isinstance(loss.item(), float)
-    print(f"  ✓ CNN end-to-end: {first_loss:.4f}→{loss.item():.4f} (runs without error)")
+    print(f"  [PASS] CNN end-to-end: {first_loss:.4f}->{loss.item():.4f} (runs without error)")
 
-# ── Runner ───────────────────────────────────────────────────────────────────
+# -- Runner -------------------------------------------------------------------
 
 if __name__ == "__main__":
     tests = [
@@ -299,10 +300,10 @@ if __name__ == "__main__":
         try:
             t(); passed += 1
         except Exception as e:
-            print(f"  ✗ {t.__name__}: {e}")
+            print(f"  [FAIL] {t.__name__}: {e}")
             import traceback; traceback.print_exc()
             failed += 1
     print(f"\n{'='*60}")
-    print(f"Results: {passed}/{passed+failed} passed  {'✓ ALL PASS' if failed==0 else f'✗ {failed} FAILED'}")
+    print(f"Results: {passed}/{passed+failed} passed  {'[PASS] ALL PASS' if failed==0 else f'[FAIL] {failed} FAILED'}")
     print('='*60)
     if failed: sys.exit(1)

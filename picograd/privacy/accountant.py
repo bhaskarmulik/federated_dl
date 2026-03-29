@@ -1,14 +1,14 @@
 """
 picograd/privacy/accountant.py
 ================================
-Rényi Differential Privacy (RDP) accountant.
+Renyi Differential Privacy (RDP) accountant.
 
 Tracks cumulative privacy budget across training rounds and converts
-to (ε, δ)-DP using the standard conversion from Balle et al. (2020).
+to (eps, delta)-DP using the standard conversion from Balle et al. (2020).
 
 Reference:
-  Mironov, "Rényi Differential Privacy" (2017).
-  Mironov et al., "Rényi Differential Privacy of the Sampled Gaussian Mechanism" (2019).
+  Mironov, "Renyi Differential Privacy" (2017).
+  Mironov et al., "Renyi Differential Privacy of the Sampled Gaussian Mechanism" (2019).
 
 Usage:
     acc = RDPAccountant()
@@ -22,25 +22,25 @@ import numpy as np
 from math import lgamma
 from typing import List, Tuple
 
-# RDP orders to track — standard set covers tight bounds for typical σ
+# RDP orders to track -- standard set covers tight bounds for typical sigma
 _DEFAULT_ORDERS = list(range(2, 64)) + [128, 256, 512]
 
 
-# ─── Core RDP computation ────────────────────────────────────────────────────
+# --- Core RDP computation ----------------------------------------------------
 
 def _log_binom(n: int, k: int) -> float:
-    """log C(n,k) via log-gamma — numerically stable."""
+    """log C(n,k) via log-gamma -- numerically stable."""
     return lgamma(n + 1) - lgamma(k + 1) - lgamma(n - k + 1)
 
 
 def _subsampled_gaussian_rdp(alpha: int, q: float, sigma: float) -> float:
     """
-    Exact RDP for the Poisson-subsampled Gaussian mechanism at integer order α.
+    Exact RDP for the Poisson-subsampled Gaussian mechanism at integer order alpha.
 
     Formula (Theorem 9, Mironov et al. 2019):
-        RDP(α) = (1/(α-1)) * log Σ_{j=0}^{α} C(α,j)*q^j*(1-q)^{α-j}*exp((j²-j)/(2σ²))
+        RDP(alpha) = (1/(alpha-1)) * log Sum_{j=0}^{alpha} C(alpha,j)*q^j*(1-q)^{alpha-j}*exp((j^2-j)/(2sigma^2))
 
-    This is the moment-generating function approach — exact for integer α.
+    This is the moment-generating function approach -- exact for integer alpha.
     """
     if sigma <= 0:
         return float('inf')
@@ -51,7 +51,7 @@ def _subsampled_gaussian_rdp(alpha: int, q: float, sigma: float) -> float:
 
     alpha_int = int(alpha)
     if alpha_int < 2:
-        # α=1: use KL bound (q²/2σ²)
+        # alpha=1: use KL bound (q^2/2sigma^2)
         return float(q * q / (2.0 * sigma * sigma))
 
     log_sum = -np.inf
@@ -67,16 +67,16 @@ def _subsampled_gaussian_rdp(alpha: int, q: float, sigma: float) -> float:
     return float(log_sum / (alpha - 1))
 
 
-# ─── RDP → (ε, δ) conversion ────────────────────────────────────────────────
+# --- RDP -> (eps, delta) conversion ------------------------------------------------
 
 def _rdp_to_epsilon(orders: List[float],
                     rdp_values: List[float],
                     delta: float) -> float:
     """
-    Convert RDP guarantee to (ε, δ)-DP.
+    Convert RDP guarantee to (eps, delta)-DP.
 
     Standard conversion (Proposition 3, Balle et al. 2020):
-        ε = rdp(α) + log(α-1)/α - [log(δ) + log(α-1)/α] / (α-1)
+        eps = rdp(alpha) + log(alpha-1)/alpha - [log(delta) + log(alpha-1)/alpha] / (alpha-1)
 
     We take the minimum over all candidate orders.
     """
@@ -86,9 +86,9 @@ def _rdp_to_epsilon(orders: List[float],
             continue
         if alpha <= 1:
             continue
-        # Convert RDP(α) → (ε, δ)-DP
+        # Convert RDP(alpha) -> (eps, delta)-DP
         # This is the tight formula from Canonne et al. / Balle et al.:
-        #   ε(α) = rdp(α) + log(1 - 1/α) - [log(δ) + log(1 - 1/α)] / (α - 1)
+        #   eps(alpha) = rdp(alpha) + log(1 - 1/alpha) - [log(delta) + log(1 - 1/alpha)] / (alpha - 1)
         try:
             log_a = np.log(1.0 - 1.0 / alpha)
             eps = rdp + log_a - (np.log(delta) + log_a) / (alpha - 1)
@@ -99,14 +99,14 @@ def _rdp_to_epsilon(orders: List[float],
     return best_eps
 
 
-# ─── RDPAccountant class ──────────────────────────────────────────────────────
+# --- RDPAccountant class ------------------------------------------------------
 
 class RDPAccountant:
     """
-    Tracks privacy expenditure via Rényi DP composition.
+    Tracks privacy expenditure via Renyi DP composition.
 
     Each step() call records one round of the subsampled Gaussian mechanism.
-    get_epsilon() converts the accumulated RDP to the tightest (ε, δ)-DP.
+    get_epsilon() converts the accumulated RDP to the tightest (eps, delta)-DP.
     """
 
     def __init__(self, orders: List[float] = None):
@@ -121,7 +121,7 @@ class RDPAccountant:
             self.rdp[i] += _subsampled_gaussian_rdp(alpha, sample_rate, noise_multiplier)
 
     def get_epsilon(self, delta: float = 1e-5) -> float:
-        """Return current (ε, δ)-DP guarantee — tight over all tracked orders."""
+        """Return current (eps, delta)-DP guarantee -- tight over all tracked orders."""
         return _rdp_to_epsilon(self.orders, self.rdp.tolist(), delta)
 
     def get_privacy_spent(self, delta: float = 1e-5) -> dict:
@@ -145,10 +145,10 @@ class RDPAccountant:
     def summary(self, delta: float = 1e-5) -> str:
         eps = self.get_epsilon(delta)
         return (f"RDPAccountant | rounds={len(self._history)} | "
-                f"ε={eps:.3f} @ δ={delta:.0e}")
+                f"eps={eps:.3f} @ delta={delta:.0e}")
 
 
-# ─── PrivacyConfig ────────────────────────────────────────────────────────────
+# --- PrivacyConfig ------------------------------------------------------------
 
 from dataclasses import dataclass
 

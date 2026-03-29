@@ -40,8 +40,8 @@ def _build_topo(root: "Tensor") -> List["Node"]:
     if root._grad_fn is not None:
         dfs(root._grad_fn)
 
-    # order is currently: leaves → root (forward order).
-    # We need root → leaves (reverse order) for backprop.
+    # order is currently: leaves -> root (forward order).
+    # We need root -> leaves (reverse order) for backprop.
     order.reverse()
     return order
 
@@ -52,7 +52,7 @@ def backward(root: "Tensor", grad=None) -> None:
 
     Parameters
     ----------
-    root  : Tensor — scalar (or any shape) tensor to differentiate from.
+    root  : Tensor -- scalar (or any shape) tensor to differentiate from.
     grad  : initial gradient (same shape as root).  Defaults to ones.
     """
     from picograd.tensor import Tensor
@@ -70,7 +70,7 @@ def backward(root: "Tensor", grad=None) -> None:
     grad_map: Dict[int, object] = {}
 
     if root._grad_fn is None:
-        # root is a leaf — accumulate directly
+        # root is a leaf -- accumulate directly
         if root.requires_grad:
             if root.grad is None:
                 root.grad = Tensor(b.copy(grad), requires_grad=False)
@@ -101,13 +101,13 @@ def backward(root: "Tensor", grad=None) -> None:
                 continue
 
             if parent_node is None:
-                # tensor is a leaf — accumulate grad
+                # tensor is a leaf -- accumulate grad
                 if tensor.grad is None:
                     tensor.grad = Tensor(b.copy(g), requires_grad=False)
                 else:
                     tensor.grad._data = b.add(tensor.grad._data, g)
             else:
-                # tensor is a non-leaf — accumulate in grad_map for the node
+                # tensor is a non-leaf -- accumulate in grad_map for the node
                 pid = id(parent_node)
                 if pid in grad_map:
                     grad_map[pid] = b.add(grad_map[pid], g)

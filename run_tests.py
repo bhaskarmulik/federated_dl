@@ -3,105 +3,133 @@
 run_tests.py
 =============
 Master test runner for the FALCON project.
-
-Runs all test suites and prints a consolidated summary.
-Exit code 0 if all pass, 1 if any fail.
+Fully Windows-compatible (UTF-8 forced, no Unicode symbols).
 
 Usage:
-    python3 run_tests.py                  # all modules
-    python3 run_tests.py --module 1       # only Module 1
-    python3 run_tests.py --module 5,6,7   # modules 5, 6, 7
+    python run_tests.py                  # all modules
+    python run_tests.py --module 1       # only Module 1
+    python run_tests.py --module 5,6,7   # modules 5, 6, 7
 """
 
-import sys, os, subprocess, time
-sys.path.insert(0, os.path.dirname(__file__))
+import sys
+import os
+import subprocess
+import time
+
+# Force UTF-8 output on Windows
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 SUITES = [
-    ("Module 1 — Tensor + Autograd",       "tests/test_tensor_autograd.py"),
-    ("Module 2 — Operations Library",       "tests/test_ops.py"),
-    ("Module 3+4 — nn.Module + Training",   "tests/test_nn_training.py"),
-    ("Module 5 — Privacy & Security",       "tests/test_privacy.py"),
-    ("Module 6+7 — AnomalyAE + FL",         "tests/test_models_fl.py"),
-    ("Module 8  — Dashboard Backend",       "tests/test_dashboard.py"),
+    ("Module 1   Tensor + Autograd",      "tests/test_tensor_autograd.py"),
+    ("Module 2   Operations Library",      "tests/test_ops.py"),
+    ("Module 3+4 nn.Module + Training",    "tests/test_nn_training.py"),
+    ("Module 5   Privacy & Security",      "tests/test_privacy.py"),
+    ("Module 6+7 AnomalyAE + FL",          "tests/test_models_fl.py"),
+    ("Module 8   Dashboard Backend",       "tests/test_dashboard.py"),
+    ("Integration Full FALCON Pipeline",   "tests/test_integration.py"),
 ]
 
-BANNER = "=" * 65
+SEP  = "=" * 65
+SEP2 = "-" * 65
 
 
-def run_suite(name: str, path: str) -> tuple:
-    """Run a test suite, return (passed, total, duration, output)."""
-    t0  = time.time()
+def run_suite(name, path):
+    t0 = time.time()
+
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
+
     res = subprocess.run(
-        [sys.executable, path],
-        capture_output=True, text=True,
-        cwd=os.path.dirname(os.path.abspath(__file__))
+        [sys.executable, "-u", path],
+        capture_output=True,
+        cwd=os.path.dirname(os.path.abspath(__file__)),
+        env=env,
     )
     dur = time.time() - t0
-    out = res.stdout + res.stderr
 
-    # Parse "Results: X/Y passed"
+    stdout = res.stdout.decode("utf-8", errors="replace")
+    stderr = res.stderr.decode("utf-8", errors="replace")
+    out = stdout + stderr
+
     passed = total = 0
     for line in out.splitlines():
         if "Results:" in line and "passed" in line:
-            parts = line.split()
-            for i, p in enumerate(parts):
-                if "/" in p:
-                    passed, total = map(int, p.split("/"))
+            for token in line.split():
+                if "/" in token:
+                    try:
+                        a, b = token.split("/")
+                        passed, total = int(a), int(b)
+                    except ValueError:
+                        pass
                     break
 
     return passed, total, dur, out, res.returncode
 
 
 def main():
-    # Parse --module flag
     modules_filter = None
     if "--module" in sys.argv:
         idx = sys.argv.index("--module")
-        modules_filter = set(int(m) for m in sys.argv[idx+1].split(","))
+        modules_filter = set(int(m.strip()) for m in sys.argv[idx + 1].split(","))
 
-    print(f"\n{BANNER}")
-    print("  FALCON — picograd Test Suite")
-    print(f"{BANNER}\n")
+    print()
+    print(SEP)
+    print("  FALCON  picograd Test Suite")
+    print(SEP)
+    print()
 
     all_passed = all_total = 0
-    failures   = []
+    failures = []
 
     for i, (name, path) in enumerate(SUITES, 1):
         if modules_filter and i not in modules_filter:
             continue
 
-        # Check file exists
-        full_path = os.path.join(os.path.dirname(__file__), path)
+        full_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
         if not os.path.exists(full_path):
-            print(f"  ⚠  {name}: test file not found ({path})")
+            print("  [SKIP] {} (not found: {})".format(name, path))
             continue
 
-        sys.stdout.write(f"  Running {name} ... ")
+        sys.stdout.write("  Running {:46s}... ".format(name))
         sys.stdout.flush()
 
         passed, total, dur, out, rc = run_suite(name, full_path)
         all_passed += passed
         all_total  += total
 
-        if rc == 0 and passed == total:
-            print(f"✓  {passed}/{total}  ({dur:.1f}s)")
+        if rc == 0 and passed == total and total > 0:
+            print("[PASS]  {}/{}  ({:.1f}s)".format(passed, total, dur))
         else:
-            print(f"✗  {passed}/{total}  ({dur:.1f}s)  ← FAILURES")
+            print("[FAIL]  {}/{}  ({:.1f}s)".format(passed, total, dur))
             failures.append((name, out))
 
-    print(f"\n{BANNER}")
-    status = "✓ ALL PASS" if not failures else f"✗ {len(failures)} SUITE(S) FAILED"
-    print(f"  TOTAL: {all_passed}/{all_total} tests passed  {status}")
-    print(f"{BANNER}\n")
+    print()
+    print(SEP)
+    if not failures:
+        status = "[PASS] ALL PASS"
+    else:
+        status = "[FAIL] {} SUITE(S) FAILED".format(len(failures))
+    print("  TOTAL: {}/{} tests  {}".format(all_passed, all_total, status))
+    print(SEP)
+    print()
 
     if failures:
-        print("── Failure details ──────────────────────────────────────────")
+        print(SEP2)
+        print("FAILURE DETAILS")
+        print(SEP2)
         for name, out in failures:
-            print(f"\n[{name}]")
-            # Print only failing test lines
+            print()
+            print("[{}]".format(name))
             for line in out.splitlines():
-                if "✗" in line or "Error" in line or "assert" in line.lower():
-                    print(f"  {line}")
+                low = line.lower()
+                if any(k in low for k in ("[fail]", "error", "traceback", "assertionerror")):
+                    print("  " + line)
         sys.exit(1)
 
     sys.exit(0)

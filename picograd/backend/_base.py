@@ -57,11 +57,11 @@ class Backend(ABC):
 
     @abstractmethod
     def from_numpy(self, arr) -> ArrayLike:
-        """Convert numpy array → backend array (may be a copy or view)."""
+        """Convert numpy array -> backend array (may be a copy or view)."""
 
     @abstractmethod
     def to_numpy(self, data: ArrayLike):
-        """Convert backend array → numpy ndarray."""
+        """Convert backend array -> numpy ndarray."""
 
     # ------------------------------------------------------------------
     # 2.  Elementwise binary ops (broadcast semantics)

@@ -32,7 +32,7 @@ class FLDashboardBridge:
         self._app   = app
         self._store = get_store()
 
-    # ─── FL lifecycle ────────────────────────────────────────────────────────
+    # --- FL lifecycle --------------------------------------------------------
 
     def on_training_start(self, config: Dict) -> None:
         self._store.set_server_status("running",
@@ -44,7 +44,7 @@ class FLDashboardBridge:
         self._store.set_server_status("done")
         self._emit("server_status", self._store.server)
 
-    # ─── Round events ────────────────────────────────────────────────────────
+    # --- Round events --------------------------------------------------------
 
     def on_round_start(self, round_num: int) -> None:
         self._store.set_server_status("running", round=round_num)
@@ -62,7 +62,7 @@ class FLDashboardBridge:
         Parameters
         ----------
         round_num      : current FL round number
-        global_model   : picograd nn.Module — the updated global model
+        global_model   : picograd nn.Module -- the updated global model
         client_metrics : list of per-client metric dicts from SiteClient.train_round()
         prev_global_sd : previous global state_dict (for weight delta computation)
         """
@@ -94,7 +94,7 @@ class FLDashboardBridge:
         self._store.record_round(round_num, metrics)
         self._emit("round_complete", {"round": round_num, **metrics})
 
-    # ─── Client events ───────────────────────────────────────────────────────
+    # --- Client events -------------------------------------------------------
 
     def on_client_connect(self, client_id: str, **meta) -> None:
         self._store.register_client(client_id, **meta)
@@ -109,7 +109,7 @@ class FLDashboardBridge:
         self._store.update_client(client_id, status="disconnected")
         self._emit("client_update", self._store.get_clients())
 
-    # ─── Privacy ─────────────────────────────────────────────────────────────
+    # --- Privacy -------------------------------------------------------------
 
     def on_privacy_update(self, round_num: int, epsilon: float,
                           delta: float = 1e-5) -> None:
@@ -120,7 +120,7 @@ class FLDashboardBridge:
             "delta":   delta,
         })
 
-    # ─── Grad-CAM ────────────────────────────────────────────────────────────
+    # --- Grad-CAM ------------------------------------------------------------
 
     def on_gradcam(self, client_id: str,
                    heatmap: np.ndarray,
@@ -145,7 +145,7 @@ class FLDashboardBridge:
         self._store.update_gradcam(client_id, payload)
         self._emit("gradcam_update", {"client_id": client_id, **payload})
 
-    # ─── Helpers ─────────────────────────────────────────────────────────────
+    # --- Helpers -------------------------------------------------------------
 
     @staticmethod
     def _ndarray_to_b64(arr: np.ndarray) -> str:

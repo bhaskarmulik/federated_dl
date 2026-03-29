@@ -4,28 +4,28 @@ dashboard/backend/app.py
 Flask + Flask-SocketIO dashboard backend.
 
 REST endpoints:
-  GET  /api/status           — server + round status
-  GET  /api/clients          — connected client list
-  GET  /api/rounds           — training metrics history
-  GET  /api/rounds/<n>       — last N rounds
-  GET  /api/weights          — weight delta heatmap data
-  GET  /api/privacy          — privacy budget timeline
-  GET  /api/gradcam/<id>     — Grad-CAM image for client
-  GET  /api/docker/containers— Docker container list
-  POST /api/docker/launch    — Launch a new client container
-  POST /api/docker/stop/<id> — Stop a container
-  GET  /api/config           — Current FL config
-  POST /api/config           — Update FL config
-  GET  /api/log              — Recent event log
+  GET  /api/status           -- server + round status
+  GET  /api/clients          -- connected client list
+  GET  /api/rounds           -- training metrics history
+  GET  /api/rounds/<n>       -- last N rounds
+  GET  /api/weights          -- weight delta heatmap data
+  GET  /api/privacy          -- privacy budget timeline
+  GET  /api/gradcam/<id>     -- Grad-CAM image for client
+  GET  /api/docker/containers-- Docker container list
+  POST /api/docker/launch    -- Launch a new client container
+  POST /api/docker/stop/<id> -- Stop a container
+  GET  /api/config           -- Current FL config
+  POST /api/config           -- Update FL config
+  GET  /api/log              -- Recent event log
 
-WebSocket events (server → client):
-  round_complete    — new round metrics available
-  client_update     — client status changed
-  weight_update     — weight delta snapshot
-  privacy_update    — epsilon updated
-  gradcam_update    — new Grad-CAM image
-  server_status     — server state changed
-  log_entry         — new log message
+WebSocket events (server -> client):
+  round_complete    -- new round metrics available
+  client_update     -- client status changed
+  weight_update     -- weight delta snapshot
+  privacy_update    -- epsilon updated
+  gradcam_update    -- new Grad-CAM image
+  server_status     -- server state changed
+  log_entry         -- new log message
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ def create_app(config: Dict = None) -> Any:
     """Application factory. Returns (app, socketio) or stub if Flask unavailable."""
 
     if not HAS_FLASK:
-        print("[dashboard] Flask not installed — dashboard backend unavailable.")
+        print("[dashboard] Flask not installed -- dashboard backend unavailable.")
         print("[dashboard] Install with: pip install flask flask-cors flask-socketio")
         return None, None
 
@@ -66,7 +66,7 @@ def create_app(config: Dict = None) -> Any:
                         async_mode="threading") if HAS_SOCKETIO else None
     store    = get_store()
 
-    # ─── REST: Status ────────────────────────────────────────────────────────
+    # --- REST: Status --------------------------------------------------------
 
     @app.route("/api/status")
     def api_status():
@@ -81,7 +81,7 @@ def create_app(config: Dict = None) -> Any:
         """Full initial state for page load."""
         return jsonify(store.snapshot())
 
-    # ─── REST: Clients ───────────────────────────────────────────────────────
+    # --- REST: Clients -------------------------------------------------------
 
     @app.route("/api/clients")
     def api_clients():
@@ -94,7 +94,7 @@ def create_app(config: Dict = None) -> Any:
             abort(404)
         return jsonify(clients[client_id])
 
-    # ─── REST: Rounds ────────────────────────────────────────────────────────
+    # --- REST: Rounds --------------------------------------------------------
 
     @app.route("/api/rounds")
     def api_rounds():
@@ -106,19 +106,19 @@ def create_app(config: Dict = None) -> Any:
         rounds = store.get_rounds(last_n=1)
         return jsonify(rounds[0] if rounds else {})
 
-    # ─── REST: Weights ───────────────────────────────────────────────────────
+    # --- REST: Weights -------------------------------------------------------
 
     @app.route("/api/weights")
     def api_weights():
         return jsonify({"heatmap": store.get_weight_heatmap()})
 
-    # ─── REST: Privacy ───────────────────────────────────────────────────────
+    # --- REST: Privacy -------------------------------------------------------
 
     @app.route("/api/privacy")
     def api_privacy():
         return jsonify(store.get_privacy())
 
-    # ─── REST: GradCAM ───────────────────────────────────────────────────────
+    # --- REST: GradCAM -------------------------------------------------------
 
     @app.route("/api/gradcam")
     def api_gradcam_all():
@@ -131,7 +131,7 @@ def create_app(config: Dict = None) -> Any:
             abort(404)
         return jsonify(data)
 
-    # ─── REST: Docker ────────────────────────────────────────────────────────
+    # --- REST: Docker --------------------------------------------------------
 
     @app.route("/api/docker/containers")
     def api_containers():
@@ -167,7 +167,7 @@ def create_app(config: Dict = None) -> Any:
             socketio.emit("client_update", store.get_clients())
         return jsonify({"stopped": container_id})
 
-    # ─── REST: Config ────────────────────────────────────────────────────────
+    # --- REST: Config --------------------------------------------------------
 
     @app.route("/api/config", methods=["GET"])
     def api_get_config():
@@ -189,14 +189,14 @@ def create_app(config: Dict = None) -> Any:
         )
         return jsonify({"ok": True})
 
-    # ─── REST: Log ───────────────────────────────────────────────────────────
+    # --- REST: Log -----------------------------------------------------------
 
     @app.route("/api/log")
     def api_log():
         n = request.args.get("n", default=50, type=int)
         return jsonify({"log": store.get_log(last_n=n)})
 
-    # ─── WebSocket events ────────────────────────────────────────────────────
+    # --- WebSocket events ----------------------------------------------------
 
     if socketio:
         @socketio.on("connect")
@@ -209,7 +209,7 @@ def create_app(config: Dict = None) -> Any:
             join_room(room)
             emit("subscribed", {"room": room})
 
-    # ─── Public broadcast helpers (called by FL server) ──────────────────────
+    # --- Public broadcast helpers (called by FL server) ----------------------
 
     def broadcast_round(round_num: int, metrics: Dict) -> None:
         store.record_round(round_num, metrics)

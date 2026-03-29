@@ -4,7 +4,7 @@ picograd/ops/normalization.py
 BatchNorm and LayerNorm as Function subclasses.
 
 BatchNorm:
-  - Train mode: normalize over (N, H, W), update running mean/var, return γ*x_hat + β
+  - Train mode: normalize over (N, H, W), update running mean/var, return gamma*x_hat + beta
   - Eval  mode: use running mean/var
   - Backward: full 4-step batch-norm gradient formula
 

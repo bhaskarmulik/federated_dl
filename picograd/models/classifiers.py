@@ -1,6 +1,6 @@
 """
-picograd/models/mlp.py  — DenseClassifier (port of glob_train.py model)
-picograd/models/lenet.py — LeNet-5
+picograd/models/mlp.py  -- DenseClassifier (port of glob_train.py model)
+picograd/models/lenet.py -- LeNet-5
 """
 
 import numpy as np
@@ -12,7 +12,7 @@ from picograd.tensor import Tensor
 class DenseClassifier(Module):
     """
     Direct port of the existing glob_train.py model:
-    Linear(784,512)→ReLU→Dropout(0.2)→Linear(512,256)→ReLU→Dropout(0.2)→Linear(256,10)
+    Linear(784,512)->ReLU->Dropout(0.2)->Linear(512,256)->ReLU->Dropout(0.2)->Linear(256,10)
     """
     def __init__(self, in_features=784, hidden1=512, hidden2=256, num_classes=10):
         super().__init__()
@@ -32,8 +32,8 @@ class DenseClassifier(Module):
 
 class LeNet5(Module):
     """
-    Classic LeNet-5 for 28×28 grayscale input (10 classes).
-    Conv→ReLU→MaxPool→Conv→ReLU→MaxPool→FC→FC→FC
+    Classic LeNet-5 for 28x28 grayscale input (10 classes).
+    Conv->ReLU->MaxPool->Conv->ReLU->MaxPool->FC->FC->FC
     """
     def __init__(self, in_channels=1, num_classes=10):
         super().__init__()
