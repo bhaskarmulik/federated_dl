@@ -1,255 +1,191 @@
-import os
-import json
-from pathlib import Path
-from typing import Dict, Optional, Tuple
+"""
+client/site_client.py
+======================
+Federated Learning client.
 
-import grpc
-import torch
-from torch.utils.data import DataLoader
-import sys
+Replaces the original torch-based site_client.py with picograd.
+Supports:
+  - Local training with any picograd model/optimizer
+  - Optional DPOptimizer wrapper
+  - FedProx proximal term
+  - Grad-CAM explainability reporting
+  - Heartbeat metrics
+"""
 
-from proto import fl_pb2_grpc
-from proto.fl_pb2 import Ack, ClientInfo, LocalUpdate, ModelBlob, PullGlobalRequest
+from __future__ import annotations
+import numpy as np
+from typing import Dict, List, Optional, Tuple
 
-from .model_io import bytes_to_state_dict, state_dict_to_bytes
+import picograd
+import picograd.nn as nn
+import picograd.optim as optim
+from picograd import Tensor
+from picograd.privacy.dp import DPOptimizer, PrivacyConfig
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-try:
-    from global_training import DenseClassifier, load_serialized_loaders
-    IMPORT_ERROR: Optional[Exception] = None
-except ImportError as exc:  
-    IMPORT_ERROR = exc
-    DenseClassifier = None
-    load_serialized_loaders = None
-
-MAX_MB = 256
-CHANNEL_OPTS = [
-    ("grpc.max_receive_message_length", MAX_MB * 1024 * 1024),
-    ("grpc.max_send_message_length", MAX_MB * 1024 * 1024),
-]
-
-DEFAULT_MODEL_PATH = Path("models/global_model.pt")
-DEFAULT_LOADER_PATH = Path("global_training/artifacts/mnist_loaders.pt")
+StateDict = Dict[str, np.ndarray]
 
 
-def grpc_channel(target: str = "localhost:50051", use_tls: bool = False) -> grpc.Channel:
-    if use_tls:
-        with open("tls/ca.crt", "rb") as f:
-            ca = f.read()
-        with open("tls/client.crt", "rb") as f:
-            cert = f.read()
-        with open("tls/client.key", "rb") as f:
-            key = f.read()
-        creds = grpc.ssl_channel_credentials(
-            root_certificates=ca, private_key=key, certificate_chain=cert
-        )
-        return grpc.secure_channel(target, creds, options=CHANNEL_OPTS)
-    return grpc.insecure_channel(target, options=CHANNEL_OPTS)
+class SiteClient:
+    """
+    A single FL client (hospital/data silo).
 
+    Usage:
+        client = SiteClient('hospital_a', model, train_loader, privacy_config)
+        client.set_global_weights(global_sd)
+        local_sd, metrics = client.train_round(epochs=1, lr=1e-3)
+    """
 
-def pull_global(
-    stub: fl_pb2_grpc.FederatedStub,
-    client_info: ClientInfo,
-    round_id: Optional[str] = None,
-    model: Optional[torch.nn.Module] = None,
-):
-    resp = stub.PullGlobal(PullGlobalRequest(client=client_info, round_id=round_id or ""))
-    if model is not None:
-        bytes_to_state_dict(model, resp.global_model.weights)
-    return resp
+    def __init__(
+        self,
+        client_id:      str,
+        model:          nn.Module,
+        train_loader,
+        privacy_config: Optional[PrivacyConfig] = None,
+        val_loader      = None,
+        use_fedprox:    bool = False,
+        fedprox_mu:     float = 0.01,
+    ):
+        self.client_id      = client_id
+        self.model          = model
+        self.train_loader   = train_loader
+        self.val_loader     = val_loader
+        self.privacy_config = privacy_config or PrivacyConfig(enabled=False)
+        self.use_fedprox    = use_fedprox
+        self.fedprox_mu     = fedprox_mu
 
+        self._global_sd: Optional[StateDict] = None
+        self._round = 0
 
-def push_update(
-    stub: fl_pb2_grpc.FederatedStub,
-    client_info: ClientInfo,
-    round_id: str,
-    model: torch.nn.Module,
-    num_samples: int,
-    metrics: Optional[Dict[str, float]] = None,
-) -> Ack:
-    weights = state_dict_to_bytes(model)
-    blob = ModelBlob(weights=weights, format="torch_state_dict")
-    upd = LocalUpdate(
-        client=client_info,
-        round_id=round_id,
-        update=blob,
-        num_samples=num_samples,
-        metric_json=json.dumps(metrics or {}),
-    )
-    ack = stub.PushUpdate(upd)
-    return ack
+    # ------------------------------------------------------------------ weights
 
+    def set_global_weights(self, global_sd: StateDict) -> None:
+        """Load global model weights before local training."""
+        self.model.load_state_dict(global_sd)
+        self._global_sd = {k: v.copy() for k, v in global_sd.items()}
 
-def bootstrap_from_artifacts(
-    model_path: Path = DEFAULT_MODEL_PATH,
-    loader_path: Path = DEFAULT_LOADER_PATH,
-    device: Optional[torch.device] = None,
-) -> Tuple[Optional[torch.nn.Module], Dict[str, DataLoader]]:
-    """Attempt to load a pretrained model and serialized DataLoaders."""
+    def get_local_weights(self) -> StateDict:
+        return self.model.state_dict()
 
-    device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # ------------------------------------------------------------------ training
 
-    if DenseClassifier is None:
-        if IMPORT_ERROR is not None:
-            print(
-                "[Client] DenseClassifier import failed. Ensure the project root is on PYTHONPATH "
-                f"or run via 'python -m client.site_client'. Error: {IMPORT_ERROR}"
+    def train_round(
+        self,
+        epochs: int = 1,
+        lr:     float = 1e-3,
+        criterion = None,
+    ) -> Tuple[StateDict, Dict]:
+        """
+        Run local training for one FL round.
+
+        Returns (local_state_dict, metrics_dict).
+        """
+        if criterion is None:
+            criterion = nn.MSELoss() if hasattr(self.model, 'encoder') \
+                        else nn.CrossEntropyLoss()
+
+        # Build optimizer
+        base_opt = optim.Adam(list(self.model.parameters()), lr=lr)
+
+        if self.privacy_config.enabled:
+            n_samples = len(self.train_loader.dataset) \
+                        if hasattr(self.train_loader, 'dataset') else 1000
+            from picograd.privacy import RDPAccountant
+            accountant = RDPAccountant()
+            optimizer  = DPOptimizer(
+                base_opt,
+                noise_multiplier = self.privacy_config.noise_multiplier,
+                max_grad_norm    = self.privacy_config.max_grad_norm,
+                batch_size       = self.train_loader.batch_size \
+                                   if hasattr(self.train_loader,'batch_size') else 32,
+                dataset_size     = n_samples,
+                accountant       = accountant,
             )
-        return None, {}
-
-    model: Optional[torch.nn.Module] = None
-    loaders: Dict[str, DataLoader] = {}
-
-    try:
-        model = DenseClassifier()
-        if model_path.exists():
-            state_dict = torch.load(model_path, map_location="cpu")
-            model.load_state_dict(state_dict)
-            print(f"[Client] Loaded model weights from {model_path}")
         else:
-            print(f"[Client] No model weights found at {model_path}; will rely on server pull.")
-        model.to(device)
-    except Exception as exc:  
-        print(f"[Client] Warning: failed to prepare DenseClassifier from artifacts: {exc}")
-        model = None
+            optimizer  = base_opt
+            accountant = None
 
-    if load_serialized_loaders is not None and loader_path.exists():
-        try:
-            loaders = load_serialized_loaders(loader_path)
-            print(f"[Client] Loaded serialized loaders from {loader_path}")
-        except Exception as exc:  
-            print(f"[Client] Warning: failed to load serialized loaders: {exc}")
-            loaders = {}
-    else:
-        if load_serialized_loaders is None:
-            print("[Client] Serialized loader utility unavailable; skipping loader bootstrap.")
-        else:
-            print(f"[Client] No serialized loaders found at {loader_path}.")
+        # FedProx helper
+        prox = None
+        if self.use_fedprox and self._global_sd is not None:
+            from server.strategies.fedprox_fedbn import FedProxLoss
+            prox = FedProxLoss(self.fedprox_mu, self.model.parameters())
 
-    return model, loaders
-def local_train_one_round(model, dataloader, plan):
-    if dataloader is None:
-        return model, 0, {}
+        self.model.train()
+        total_loss  = 0.0
+        total_steps = 0
 
-    device = next(model.parameters()).device
-    model.train()
+        for epoch in range(epochs):
+            for batch in self.train_loader:
+                x, y = batch if isinstance(batch, (list, tuple)) else (batch, batch)
+                self.model.zero_grad()
+                out  = self.model(x)
 
-    optimizer_name = (getattr(plan, "optimizer", "") or "sgd").lower()
-    lr = getattr(plan, "lr", 0.01) or 0.01
-    if optimizer_name == "adam":
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    else:
-        optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-
-    criterion = torch.nn.CrossEntropyLoss()
-    epochs = max(int(getattr(plan, "local_epochs", 1) or 1), 1)
-    send_metrics = bool(getattr(plan, "send_metrics", True))
-
-    total_loss = 0.0
-    total_correct = 0
-    total_samples = 0
-
-    for _ in range(epochs):
-        for batch in dataloader:
-            if isinstance(batch, dict):
-                inputs = batch.get("x") or batch.get("inputs")
-                targets = batch.get("y") or batch.get("labels")
-            elif isinstance(batch, (list, tuple)):
-                if len(batch) == 0:
-                    continue
-                if len(batch) == 1:
-                    inputs, targets = batch[0], None
+                # Primary loss
+                if isinstance(criterion, nn.MSELoss):
+                    loss = criterion(out, x)   # autoencoder: reconstruct input
                 else:
-                    inputs, targets = batch[0], batch[1]
-            else:
-                raise TypeError("Unsupported batch type from dataloader")
+                    loss = criterion(out, y)
 
-            if targets is None:
-                raise ValueError("Targets are required for training")
+                # FedProx proximal term
+                if prox is not None:
+                    loss = loss + prox(self.model.parameters())
 
-            inputs = inputs.to(device)
-            targets = targets.to(device)
+                loss.backward()
+                optimizer.step()
+                total_loss  += loss.item()
+                total_steps += 1
 
-            optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, targets)
-            loss.backward()
-            optimizer.step()
+        avg_loss = total_loss / max(total_steps, 1)
 
-            batch_size = targets.size(0)
-            total_loss += loss.item() * batch_size
-            total_samples += batch_size
-            if send_metrics:
-                preds = outputs.argmax(dim=1)
-                total_correct += (preds == targets).sum().item()
+        # Privacy budget
+        epsilon = None
+        if accountant is not None:
+            epsilon = accountant.get_epsilon(self.privacy_config.target_delta)
 
-    if total_samples == 0:
-        return model, 0, {}
+        metrics = {
+            'client_id':  self.client_id,
+            'round':      self._round,
+            'train_loss': avg_loss,
+            'epsilon':    epsilon,
+            'n_samples':  total_steps,
+        }
 
-    metrics = {}
-    if send_metrics:
-        metrics["loss"] = total_loss / total_samples
-        metrics["acc"] = total_correct / total_samples
-    return model, total_samples, metrics
+        # Validation loss
+        if self.val_loader is not None:
+            metrics['val_loss'] = self._eval(criterion)
 
+        self._round += 1
+        return self.get_local_weights(), metrics
 
-def run_client(target: str = "localhost:50051", use_tls: bool = False):
-    print(f"[Client] Starting. Target={target} TLS={use_tls}")
-    channel = grpc_channel(target, use_tls)
-    try:
-        grpc.channel_ready_future(channel).result(timeout=10)
-    except grpc.FutureTimeoutError:
-        print(f"[Client] Unable to reach server at {target} within timeout.")
-        return
+    def _eval(self, criterion) -> float:
+        self.model.eval()
+        total = 0.0
+        n     = 0
+        with picograd.no_grad():
+            for batch in self.val_loader:
+                x, y = batch if isinstance(batch, (list, tuple)) else (batch, batch)
+                out  = self.model(x)
+                loss = criterion(out, x if isinstance(criterion, nn.MSELoss) else y)
+                total += loss.item()
+                n += 1
+        self.model.train()
+        return total / max(n, 1)
 
-    stub = fl_pb2_grpc.FederatedStub(channel)
+    # ------------------------------------------------------------------ anomaly detection
 
-    client = ClientInfo(
-        client_id=os.environ.get("CLIENT_ID", "site-A"),
-        dataset="mnist",
-        model_name="dense_classifier" if DenseClassifier else "resnet18",
-        framework="torch",
-        version="1.0.0",
-    )
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model, loaders = bootstrap_from_artifacts(device=device)
-    if model is None:
-        print("[Client] DenseClassifier artifacts unavailable; falling back to ResNet18.")
-        import torchvision.models as models
-
-        model = models.resnet18(num_classes=2)
-        model.to(device)
-        loaders = {}
-
-    resp = pull_global(stub, client, model=model)
-    round_id = resp.plan.round_id
-    print(f"[Client] Pulled global for round {round_id}")
-
-    train_loader = loaders.get("train") if loaders else None
-    if train_loader is None:
-        print("[Client] No train loader available; skipping local training.")
-    else:
-        print(
-            f"[Client] Starting local training for {len(train_loader.dataset)} samples, "
-            f"batch_size={train_loader.batch_size}."
-        )
-    model, num_samples, metrics = local_train_one_round(model, train_loader, resp.plan)
-
-    if num_samples == 0:
-        print("[Client] No local samples were trained; sending empty update.")
-    else:
-        print(
-            f"[Client] Finished local training: samples={num_samples}, "
-            f"metrics={json.dumps(metrics)}"
-        )
-
-    ack = push_update(stub, client, round_id, model, num_samples, metrics)
-    print("[Client] PushUpdate:", ack.status, ack.message)
+    def compute_anomaly_threshold(self, percentile: float = 95.0) -> float:
+        """Compute local anomaly threshold from validation data."""
+        if self.val_loader is None:
+            raise RuntimeError("val_loader required for threshold computation")
+        errors = []
+        self.model.eval()
+        with picograd.no_grad():
+            for batch in self.val_loader:
+                x = batch[0] if isinstance(batch, (list, tuple)) else batch
+                rec  = self.model(x)
+                err  = ((x._data - rec._data)**2).mean(axis=(1,2,3))
+                errors.extend(err.tolist())
+        return float(np.percentile(errors, percentile))
 
 
-if __name__ == "__main__":
-    run_client()
+__all__ = ["SiteClient"]

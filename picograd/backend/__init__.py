@@ -1,33 +1,33 @@
-"""Backend registry — module-level singleton for the active backend.
-
-Usage::
-
+"""
+picograd/backend/__init__.py
+============================
+Module-level singleton for the active backend.
+Usage:
     from picograd.backend import get_backend, set_backend
-    B = get_backend()          # returns the current Backend instance
-    B.matmul(a, b)
+    b = get_backend()
+    b.matmul(a, b)
+
+    # swap backends:
+    picograd.set_backend(TritonBackend())
 """
 
-from __future__ import annotations
+from picograd.backend._base import Backend
+from picograd.backend.numpy_backend import NumpyBackend
 
-from typing import Optional
-
-from ._base import Backend
-
-__all__ = ["get_backend", "set_backend", "Backend"]
-
-_CURRENT_BACKEND: Optional[Backend] = None
+_BACKEND: Backend = NumpyBackend()   # default backend
 
 
 def get_backend() -> Backend:
-    """Return the active backend, lazily initialising to ``NumpyBackend``."""
-    global _CURRENT_BACKEND
-    if _CURRENT_BACKEND is None:
-        from .numpy_backend import NumpyBackend
-        _CURRENT_BACKEND = NumpyBackend()
-    return _CURRENT_BACKEND
+    """Return the currently active backend."""
+    return _BACKEND
 
 
 def set_backend(backend: Backend) -> None:
-    """Replace the active backend globally."""
-    global _CURRENT_BACKEND
-    _CURRENT_BACKEND = backend
+    """Replace the active backend with a new one."""
+    global _BACKEND
+    if not isinstance(backend, Backend):
+        raise TypeError(f"Expected a Backend instance, got {type(backend)}")
+    _BACKEND = backend
+
+
+__all__ = ["Backend", "NumpyBackend", "get_backend", "set_backend"]

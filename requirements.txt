@@ -1,7 +1,17 @@
-grpcio==1.66.1
-grpcio-tools==1.66.1
-protobuf>=4.25.0
-torch>=2.1.0      # or your version
+# FALCON Python dependencies
+# ===========================
+# Core (picograd only needs numpy)
 numpy>=1.24.0
 
-. -e
+# Dashboard backend (optional — only needed to run the web dashboard)
+flask>=3.0.0
+flask-cors>=4.0.0
+flask-socketio>=5.3.0
+eventlet>=0.35.0
+
+# Dataset (optional — only needed for MedMNIST experiments)
+# medmnist>=3.0.0
+# Pillow>=10.0.0
+
+# Testing utilities (optional)
+# pytest>=7.4.0

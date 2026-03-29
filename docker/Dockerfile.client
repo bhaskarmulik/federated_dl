@@ -1,0 +1,20 @@
+# docker/Dockerfile.client
+# ==========================
+# FALCON FL client — connects to gRPC server and trains locally.
+
+FROM falcon-base:latest
+
+# Client-specific deps (medmnist for real data)
+RUN pip install --no-cache-dir medmnist pillow
+
+ENV FALCON_SERVER_HOST=falcon-server
+ENV FALCON_SERVER_PORT=50051
+ENV FALCON_CLIENT_ID=client_default
+ENV FALCON_DATASET=BreastMNIST
+ENV FALCON_ALPHA=0.5
+ENV FALCON_DP_ENABLED=true
+ENV FALCON_NOISE_MULTIPLIER=1.0
+
+EXPOSE 8080
+
+CMD ["python3", "-m", "client.site_client"]

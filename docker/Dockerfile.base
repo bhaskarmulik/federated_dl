@@ -1,0 +1,30 @@
+# docker/Dockerfile.base
+# =======================
+# Shared base image for all FALCON containers.
+# Python 3.11-slim + numpy (the only runtime dependency for picograd).
+
+FROM python:3.11-slim
+
+LABEL maintainer="FALCON Final Year Project"
+LABEL description="FALCON base image — picograd + FL infrastructure"
+
+# System deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc g++ curl && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the picograd framework and FL infrastructure
+COPY picograd/   picograd/
+COPY server/     server/
+COPY client/     client/
+COPY falcon/     falcon/
+COPY scripts/    scripts/
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app

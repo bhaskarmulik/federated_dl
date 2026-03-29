@@ -1,50 +1,64 @@
-"""Autograd context managers: ``no_grad`` and ``enable_grad``."""
+"""
+picograd/autograd/context.py
+=============================
+Thread-local flag controlling graph construction.
 
-from __future__ import annotations
+Usage:
+    with picograd.no_grad():
+        out = model(x)   # no DAG nodes created
+
+    @picograd.no_grad()
+    def inference(x):
+        return model(x)
+"""
 
 import threading
-
-__all__ = ["no_grad", "enable_grad", "is_grad_enabled"]
-
-# Thread-local flag, (every thread - own op)
-_tls = threading.local()
+from typing import Optional
 
 
-def is_grad_enabled() -> bool:
-    return getattr(_tls, "grad_enabled", True)
+_LOCAL = threading.local()
 
 
-def _set_grad_enabled(val: bool) -> None:
-    _tls.grad_enabled = val
+def _grad_enabled() -> bool:
+    """Return True if gradient tracking is currently active."""
+    return getattr(_LOCAL, "grad_enabled", True)
+
+
+def _set_grad_enabled(enabled: bool) -> None:
+    _LOCAL.grad_enabled = enabled
 
 
 class no_grad:
-    """Cwantext manager for disabling them gradient tracking stuff."""
+    """Context manager / decorator that disables gradient computation."""
 
-    def __enter__(self) -> "no_grad":
-        self._prev = is_grad_enabled()
+    def __enter__(self):
+        self._prev = _grad_enabled()
         _set_grad_enabled(False)
         return self
 
-    def __exit__(self, *args: object) -> None:
+    def __exit__(self, *args):
         _set_grad_enabled(self._prev)
 
-    def __call__(self, func):  # decorator usage
+    def __call__(self, func):
+        """Allow use as a decorator."""
         import functools
-
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            with self:
+            with no_grad():
                 return func(*args, **kwargs)
         return wrapper
 
 
 class enable_grad:
+    """Context manager that (re-)enables gradient computation."""
 
-    def __enter__(self) -> "enable_grad":
-        self._prev = is_grad_enabled()
+    def __enter__(self):
+        self._prev = _grad_enabled()
         _set_grad_enabled(True)
         return self
 
-    def __exit__(self, *args: object) -> None:
+    def __exit__(self, *args):
         _set_grad_enabled(self._prev)
+
+
+__all__ = ["no_grad", "enable_grad", "_grad_enabled"]

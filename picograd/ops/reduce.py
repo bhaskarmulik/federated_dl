@@ -1,131 +1,142 @@
-"""Reduction operations: Sum, Mean, Max, Min."""
+"""
+picograd/ops/reduce.py
+=======================
+Reduction operations: Sum, Mean, Max, Min.
+
+Backward for reductions requires expanding/broadcasting the
+incoming gradient back to the input shape.
+"""
 
 from __future__ import annotations
-
-from ..autograd.function import Context, Function
-from ..backend import get_backend
-
-__all__ = ["Sum", "Mean", "Max", "Min"]
+import numpy as np
+from picograd.autograd.function import Function, Context
+from picograd.backend import get_backend
 
 
 class Sum(Function):
     @staticmethod
-    def forward(ctx, a, *, axis=None, keepdims=False):
-        from ..tensor import Tensor
-        B = get_backend()
-        ctx.a_shape = B.shape_of(a._data)
+    def forward(ctx: Context, a, axis, keepdims):
+        b = get_backend()
+        ctx.save_for_backward(a)
         ctx.axis = axis
         ctx.keepdims = keepdims
-        return Tensor(B.sum(a._data, axis=axis, keepdims=keepdims), _backend=B)
+        return b.sum(a, axis=axis, keepdims=keepdims)
 
     @staticmethod
-    def backward(ctx, grad_output):
-        from ..tensor import Tensor
-        B = get_backend()
-        g = grad_output._data
-        # Restore reduced dimensions so broadcast works
-        if ctx.axis is not None and not ctx.keepdims:
-            axes = (ctx.axis,) if isinstance(ctx.axis, int) else tuple(ctx.axis)
+    def backward(ctx: Context, grad):
+        a, = ctx.saved_tensors
+        b = get_backend()
+        # Expand grad back to input shape
+        g = grad
+        if not ctx.keepdims and ctx.axis is not None:
+            axes = (ctx.axis,) if isinstance(ctx.axis, int) else ctx.axis
             for ax in sorted(axes):
-                g = B.expand_dims(g, ax)
-        return (Tensor(B.broadcast_to(g, ctx.a_shape).copy(), _backend=B),)
+                g = b.unsqueeze(g, ax)
+        return (b.expand(g, b.shape_of(a)),)
 
 
 class Mean(Function):
     @staticmethod
-    def forward(ctx, a, *, axis=None, keepdims=False):
-        from ..tensor import Tensor
-        B = get_backend()
-        ctx.a_shape = B.shape_of(a._data)
+    def forward(ctx: Context, a, axis, keepdims):
+        b = get_backend()
+        ctx.save_for_backward(a)
         ctx.axis = axis
         ctx.keepdims = keepdims
-        # Compute the count of elements in the reduced dims
-        shape = ctx.a_shape
+        out = b.mean(a, axis=axis, keepdims=keepdims)
+        # Compute the number of elements averaged over
         if axis is None:
-            ctx.count = B.numel(a._data)
+            ctx.n = a.size
+        elif isinstance(axis, int):
+            ctx.n = a.shape[axis]
         else:
-            axes = (axis,) if isinstance(axis, int) else tuple(axis)
-            ctx.count = 1
-            for ax in axes:
-                ctx.count *= shape[ax]
-        return Tensor(B.mean(a._data, axis=axis, keepdims=keepdims), _backend=B)
+            ctx.n = int(np.prod([a.shape[i] for i in axis]))
+        return out
 
     @staticmethod
-    def backward(ctx, grad_output):
-        from ..tensor import Tensor
-        B = get_backend()
-        g = grad_output._data
-        if ctx.axis is not None and not ctx.keepdims:
-            axes = (ctx.axis,) if isinstance(ctx.axis, int) else tuple(ctx.axis)
+    def backward(ctx: Context, grad):
+        a, = ctx.saved_tensors
+        b = get_backend()
+        g = grad
+        if not ctx.keepdims and ctx.axis is not None:
+            axes = (ctx.axis,) if isinstance(ctx.axis, int) else ctx.axis
             for ax in sorted(axes):
-                g = B.expand_dims(g, ax)
-        g = B.div(B.broadcast_to(g, ctx.a_shape), B.array(ctx.count))
-        return (Tensor(g.copy(), _backend=B),)
+                g = b.unsqueeze(g, ax)
+        g = b.expand(g, b.shape_of(a))
+        # Divide by n (mean divides by n in forward)
+        return (b.div(g, b.full(b.shape_of(g), float(ctx.n))),)
 
 
 class Max(Function):
     @staticmethod
-    def forward(ctx, a, *, axis=None, keepdims=False):
-        from ..tensor import Tensor
-        B = get_backend()
-        out = B.max(a._data, axis=axis, keepdims=keepdims)
-        # Mask of positions equal to the max (for gradient routing)
-        if axis is not None and not keepdims:
-            max_expanded = B.expand_dims(out, axis)
-        elif axis is None:
-            max_expanded = out
-        else:
-            max_expanded = out
-        ctx.mask = B.eq(a._data, B.broadcast_to(max_expanded, B.shape_of(a._data)))
-        ctx.a_shape = B.shape_of(a._data)
+    def forward(ctx: Context, a, axis, keepdims):
+        b = get_backend()
+        out = b.max(a, axis=axis, keepdims=keepdims)
+        ctx.save_for_backward(a)
+        ctx.out = out
         ctx.axis = axis
         ctx.keepdims = keepdims
-        return Tensor(out, _backend=B)
+        return out
 
     @staticmethod
-    def backward(ctx, grad_output):
-        from ..tensor import Tensor
-        B = get_backend()
-        g = grad_output._data
-        if ctx.axis is not None and not ctx.keepdims:
-            g = B.expand_dims(g, ctx.axis)
-        g = B.broadcast_to(g, ctx.a_shape)
-        # Distribute gradient to max positions; divide to handle ties
-        mask = B.astype(ctx.mask, B.default_float_dtype())
-        denom = B.sum(mask, axis=ctx.axis, keepdims=True)
-        denom = B.maximum(denom, B.ones((), dtype=B.default_float_dtype()))
-        result = B.div(B.mul(g, mask), denom)
-        return (Tensor(result, _backend=B),)
+    def backward(ctx: Context, grad):
+        a, = ctx.saved_tensors
+        b = get_backend()
+        out = ctx.out
+        g = grad
+
+        # Expand out back for comparison
+        if not ctx.keepdims and ctx.axis is not None:
+            axes = (ctx.axis,) if isinstance(ctx.axis, int) else ctx.axis
+            for ax in sorted(axes):
+                out = b.unsqueeze(out, ax)
+                g = b.unsqueeze(g, ax)
+
+        out_expanded = b.expand(out, b.shape_of(a))
+        g_expanded = b.expand(g, b.shape_of(a))
+
+        # Mask: 1 where a == max, else 0
+        mask = b.cast(b.eq(a, out_expanded), np.float32)
+        # Normalize over ties
+        count = b.sum(mask, axis=ctx.axis, keepdims=True)
+        count = b.expand(count, b.shape_of(a))
+        mask = b.div(mask, count)
+
+        return (b.mul(g_expanded, mask),)
 
 
-class Min(Function):
+class Min_op(Function):
     @staticmethod
-    def forward(ctx, a, *, axis=None, keepdims=False):
-        from ..tensor import Tensor
-        B = get_backend()
-        out = B.min(a._data, axis=axis, keepdims=keepdims)
-        if axis is not None and not keepdims:
-            min_expanded = B.expand_dims(out, axis)
-        elif axis is None:
-            min_expanded = out
-        else:
-            min_expanded = out
-        ctx.mask = B.eq(a._data, B.broadcast_to(min_expanded, B.shape_of(a._data)))
-        ctx.a_shape = B.shape_of(a._data)
+    def forward(ctx: Context, a, axis, keepdims):
+        b = get_backend()
+        out = b.min(a, axis=axis, keepdims=keepdims)
+        ctx.save_for_backward(a)
+        ctx.out = out
         ctx.axis = axis
         ctx.keepdims = keepdims
-        return Tensor(out, _backend=B)
+        return out
 
     @staticmethod
-    def backward(ctx, grad_output):
-        from ..tensor import Tensor
-        B = get_backend()
-        g = grad_output._data
-        if ctx.axis is not None and not ctx.keepdims:
-            g = B.expand_dims(g, ctx.axis)
-        g = B.broadcast_to(g, ctx.a_shape)
-        mask = B.astype(ctx.mask, B.default_float_dtype())
-        denom = B.sum(mask, axis=ctx.axis, keepdims=True)
-        denom = B.maximum(denom, B.ones((), dtype=B.default_float_dtype()))
-        result = B.div(B.mul(g, mask), denom)
-        return (Tensor(result, _backend=B),)
+    def backward(ctx: Context, grad):
+        a, = ctx.saved_tensors
+        b = get_backend()
+        out = ctx.out
+        g = grad
+
+        if not ctx.keepdims and ctx.axis is not None:
+            axes = (ctx.axis,) if isinstance(ctx.axis, int) else ctx.axis
+            for ax in sorted(axes):
+                out = b.unsqueeze(out, ax)
+                g = b.unsqueeze(g, ax)
+
+        out_expanded = b.expand(out, b.shape_of(a))
+        g_expanded = b.expand(g, b.shape_of(a))
+
+        mask = b.cast(b.eq(a, out_expanded), np.float32)
+        count = b.sum(mask, axis=ctx.axis, keepdims=True)
+        count = b.expand(count, b.shape_of(a))
+        mask = b.div(mask, count)
+
+        return (b.mul(g_expanded, mask),)
+
+
+__all__ = ["Sum", "Mean", "Max", "Min_op"]

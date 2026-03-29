@@ -1,15 +1,5 @@
-"""picograd.autograd — computational-graph construction and backward engine."""
+from picograd.autograd.function import Function, Context, Node
+from picograd.autograd.engine import backward
+from picograd.autograd.context import no_grad, enable_grad, _grad_enabled
 
-from .context import enable_grad, is_grad_enabled, no_grad
-from .engine import backward
-from .function import Context, Function, Node
-
-__all__ = [
-    "Function",
-    "Context",
-    "Node",
-    "backward",
-    "no_grad",
-    "enable_grad",
-    "is_grad_enabled",
-]
+__all__ = ["Function", "Context", "Node", "backward", "no_grad", "enable_grad"]

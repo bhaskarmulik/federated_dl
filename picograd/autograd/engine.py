@@ -1,98 +1,118 @@
-"""Backward engine — topological-sort-based reverse-mode autodiff."""
+"""
+picograd/autograd/engine.py
+============================
+Reverse-mode automatic differentiation engine.
+
+`backward(root_tensor, grad)` performs:
+  1. Topological sort of the DAG (reverse post-order DFS).
+  2. Walk nodes in reverse order, calling Function.backward().
+  3. Route and accumulate gradients back to leaf Tensors.
+
+Fan-out (a tensor used in multiple ops) is handled by *accumulating*
+gradients: leaf.grad += incoming_grad  (not just assignment).
+"""
 
 from __future__ import annotations
-
-from typing import TYPE_CHECKING, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
-    from ..tensor import Tensor
-    from .function import Node
-
-__all__ = ["backward"]
+    from picograd.tensor import Tensor
+    from picograd.autograd.function import Node
 
 
-def _topo_sort(root: "Node") -> List["Node"]:
-    """Return nodes in reverse-topological order (root first)."""
-    visited: Set[int] = set()
+def _build_topo(root: "Tensor") -> List["Node"]:
+    """
+    Return a list of Nodes in *reverse* topological order (output first).
+    Uses iterative DFS with a visited set to handle DAGs (shared subgraphs).
+    """
     order: List["Node"] = []
+    visited = set()
 
-    def _dfs(node: Optional["Node"]) -> None:
-        if node is None or id(node) in visited:
+    def dfs(node: "Node") -> None:
+        if id(node) in visited:
             return
         visited.add(id(node))
-        for parent in node.inputs:
-            _dfs(parent)
+        for (tensor, parent_node) in node.input_nodes:
+            if parent_node is not None:
+                dfs(parent_node)
         order.append(node)
 
-    _dfs(root)
-    order.reverse()  # root first → we process from output toward leaves
+    if root._grad_fn is not None:
+        dfs(root._grad_fn)
+
+    # order is currently: leaves → root (forward order).
+    # We need root → leaves (reverse order) for backprop.
+    order.reverse()
     return order
 
 
-def backward(root_tensor: "Tensor", grad: Optional["Tensor"] = None) -> None:
-    """Compute gradients for all leaves reachable from *root_tensor*.
+def backward(root: "Tensor", grad=None) -> None:
+    """
+    Compute gradients for all leaf tensors that contributed to root.
 
     Parameters
     ----------
-    root_tensor:
-        Must be a scalar (``numel == 1``) unless *grad* is provided.
-    grad:
-        Seed gradient (same shape as *root_tensor*).  Defaults to ones.
+    root  : Tensor — scalar (or any shape) tensor to differentiate from.
+    grad  : initial gradient (same shape as root).  Defaults to ones.
     """
-    from ..tensor import Tensor
+    from picograd.tensor import Tensor
+    from picograd.backend import get_backend
 
-    if root_tensor._grad_fn is None:
-        return  # leaf — nothing to differentiate
+    b = get_backend()
 
+    # Seed gradient
     if grad is None:
-        if root_tensor.numel != 1:
-            raise RuntimeError(
-                "backward() requires grad for non-scalar tensors"
-            )
-        grad = Tensor(root_tensor._backend.ones(root_tensor.shape,
-                                                  dtype=root_tensor.dtype),
-                       requires_grad=False)
+        grad = b.ones(b.shape_of(root._data))
+    elif isinstance(grad, Tensor):
+        grad = grad._data
 
-    # ----- topological ordering -------------------------------------------
-    nodes = _topo_sort(root_tensor._grad_fn)
+    # Map from Node-id to accumulated gradient (raw backend array)
+    grad_map: Dict[int, object] = {}
 
-    # Map  node-id  →  accumulated gradient *of that node's output*
-    grad_map: Dict[int, "Tensor"] = {id(root_tensor._grad_fn): grad}
+    if root._grad_fn is None:
+        # root is a leaf — accumulate directly
+        if root.requires_grad:
+            if root.grad is None:
+                root.grad = Tensor(b.copy(grad), requires_grad=False)
+            else:
+                root.grad._data = b.add(root.grad._data, grad)
+        return
 
-    for node in nodes:
-        out_grad = grad_map.get(id(node))
-        if out_grad is None:
+    # Seed the root node
+    grad_map[id(root._grad_fn)] = grad
+
+    topo_order = _build_topo(root)
+
+    for node in topo_order:
+        if id(node) not in grad_map:
             continue
+        g_out = grad_map[id(node)]
 
-        # Call the backward of the function that produced this node.
-        grads = node.function_cls.backward(node.ctx, out_grad)
+        # Call the operation's backward
+        grads = node.function.backward(node.ctx, g_out)
+        if not isinstance(grads, (list, tuple)):
+            grads = (grads,)
 
-        # ``grads`` is a tuple with one entry per original input.
-        input_tensors = node._input_tensors
-
-        for inp_tensor, inp_node, g in zip(input_tensors, node.inputs, grads):
-            if g is None:
+        # Route gradients to parent tensors / nodes
+        for (tensor, parent_node), g in zip(node.input_nodes, grads):
+            if g is None or tensor is None:
                 continue
-            if not isinstance(inp_tensor, Tensor):
-                continue
-            if not inp_tensor.requires_grad:
+            if not tensor.requires_grad:
                 continue
 
-            # --- leaf tensor: accumulate into .grad ---------------------------
-            if inp_tensor.is_leaf:
-                if inp_tensor.grad is None:
-                    inp_tensor.grad = Tensor(g._data.copy(), requires_grad=False)
+            if parent_node is None:
+                # tensor is a leaf — accumulate grad
+                if tensor.grad is None:
+                    tensor.grad = Tensor(b.copy(g), requires_grad=False)
                 else:
-                    inp_tensor.grad._data = inp_tensor._backend.add(
-                        inp_tensor.grad._data, g._data
-                    )
-            # --- intermediate: accumulate for its grad_fn --------------------
-            if inp_tensor._grad_fn is not None:
-                nid = id(inp_tensor._grad_fn)
-                if nid in grad_map:
-                    grad_map[nid] = Tensor(
-                        inp_tensor._backend.add(grad_map[nid]._data, g._data),
-                        requires_grad=False,
-                    )
+                    tensor.grad._data = b.add(tensor.grad._data, g)
+            else:
+                # tensor is a non-leaf — accumulate in grad_map for the node
+                pid = id(parent_node)
+                if pid in grad_map:
+                    grad_map[pid] = b.add(grad_map[pid], g)
                 else:
-                    grad_map[nid] = g
+                    grad_map[pid] = g
+
+
+__all__ = ["backward"]

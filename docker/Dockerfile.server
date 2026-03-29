@@ -1,0 +1,14 @@
+# docker/Dockerfile.server
+# ==========================
+# FALCON aggregation server (gRPC + Flask dashboard backend).
+
+FROM falcon-base:latest
+
+COPY proto/     proto/
+
+# gRPC server entrypoint
+EXPOSE 50051    
+# Dashboard HTTP/WS
+EXPOSE 5000     
+
+CMD ["python3", "-m", "server.aggregator"]

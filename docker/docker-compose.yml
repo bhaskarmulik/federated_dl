@@ -1,0 +1,165 @@
+version: "3.9"
+
+# ══════════════════════════════════════════════════════════════════════════
+#  FALCON — Full System Docker Compose
+#  Usage:
+#    docker-compose up --build                  # start everything
+#    docker-compose up --scale falcon-client=3  # 3 clients
+#    docker-compose down                        # stop + remove
+# ══════════════════════════════════════════════════════════════════════════
+
+services:
+
+  # ── FL Aggregation Server ───────────────────────────────────────────────
+  falcon-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.server
+    image: falcon-server:latest
+    container_name: falcon-server
+    ports:
+      - "50051:50051"   # gRPC
+      - "5000:5000"     # Dashboard REST + WebSocket
+    environment:
+      - FALCON_STRATEGY=fedavg
+      - FALCON_MIN_CLIENTS=2
+      - FALCON_ROUNDS=20
+      - FALCON_SECURE_AGG=true
+      - FALCON_DP_ENABLED=true
+      - FALCON_NOISE_MULTIPLIER=1.0
+      - FALCON_MAX_GRAD_NORM=1.0
+    volumes:
+      - falcon-models:/app/models
+      - falcon-logs:/app/logs
+    networks:
+      - falcon-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import socket; s=socket.socket(); s.connect(('localhost',50051)); s.close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── FL Client (scalable — docker-compose up --scale falcon-client=N) ───
+  falcon-client:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.client
+    image: falcon-client:latest
+    deploy:
+      replicas: 2
+    environment:
+      - FALCON_SERVER_HOST=falcon-server
+      - FALCON_SERVER_PORT=50051
+      - FALCON_DATASET=BreastMNIST
+      - FALCON_ALPHA=0.5
+      - FALCON_DP_ENABLED=true
+      - FALCON_NOISE_MULTIPLIER=1.0
+      - FALCON_MAX_GRAD_NORM=1.0
+      - FALCON_LOCAL_EPOCHS=2
+      - FALCON_LR=0.001
+    volumes:
+      - falcon-data:/app/data
+    networks:
+      - falcon-net
+    depends_on:
+      falcon-server:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Dashboard (React + Flask) ───────────────────────────────────────────
+  falcon-dashboard:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dashboard
+    image: falcon-dashboard:latest
+    container_name: falcon-dashboard
+    ports:
+      - "3000:5000"     # Dashboard accessible at http://localhost:3000
+    environment:
+      - FALCON_SERVER_URL=http://falcon-server:5000
+      - FLASK_ENV=production
+    networks:
+      - falcon-net
+    depends_on:
+      - falcon-server
+    restart: unless-stopped
+
+  # ── Cross-Modality Clients (different datasets per client) ─────────────
+  falcon-client-breast:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.client
+    image: falcon-client:latest
+    container_name: falcon-client-breast
+    environment:
+      - FALCON_SERVER_HOST=falcon-server
+      - FALCON_SERVER_PORT=50051
+      - FALCON_CLIENT_ID=hospital_breast
+      - FALCON_DATASET=BreastMNIST
+      - FALCON_ALPHA=0.5
+      - FALCON_DP_ENABLED=true
+    networks:
+      - falcon-net
+    depends_on:
+      falcon-server:
+        condition: service_healthy
+    profiles: ["cross-modality"]
+
+  falcon-client-pneumonia:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.client
+    image: falcon-client:latest
+    container_name: falcon-client-pneumonia
+    environment:
+      - FALCON_SERVER_HOST=falcon-server
+      - FALCON_SERVER_PORT=50051
+      - FALCON_CLIENT_ID=hospital_pneumonia
+      - FALCON_DATASET=PneumoniaMNIST
+      - FALCON_ALPHA=0.3
+      - FALCON_DP_ENABLED=true
+    networks:
+      - falcon-net
+    depends_on:
+      falcon-server:
+        condition: service_healthy
+    profiles: ["cross-modality"]
+
+  falcon-client-retina:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.client
+    image: falcon-client:latest
+    container_name: falcon-client-retina
+    environment:
+      - FALCON_SERVER_HOST=falcon-server
+      - FALCON_SERVER_PORT=50051
+      - FALCON_CLIENT_ID=hospital_retina
+      - FALCON_DATASET=RetinaMNIST
+      - FALCON_ALPHA=0.1
+      - FALCON_DP_ENABLED=true
+    networks:
+      - falcon-net
+    depends_on:
+      falcon-server:
+        condition: service_healthy
+    profiles: ["cross-modality"]
+
+# ── Volumes ─────────────────────────────────────────────────────────────
+volumes:
+  falcon-models:
+    driver: local
+  falcon-data:
+    driver: local
+  falcon-logs:
+    driver: local
+
+# ── Networks ─────────────────────────────────────────────────────────────
+networks:
+  falcon-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

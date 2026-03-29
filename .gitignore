@@ -58,3 +58,4 @@ tls/
 
 # Ignore all artifacts except the ones we want
 global_training/artifacts/
+

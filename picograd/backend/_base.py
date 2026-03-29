@@ -1,338 +1,261 @@
-"""Abstract backend interface — the single point of dispatch for all numerical operations.
+"""
+picograd/backend/_base.py
+=========================
+Abstract base class (Backend) defining the ~40-method dispatch table that
+all numerical operations must go through. Concrete backends (NumpyBackend,
+future TritonBackend) implement every method here.
 
-Every method here operates on *raw backend arrays* (e.g. ``np.ndarray`` for the
-NumPy backend).  Higher-level code (Tensor, autograd, nn) never imports a
-concrete numerics library directly; it always goes through
-``get_backend().<method>(...)``.
-
-To add a new backend (Triton, C++, CuPy, …), subclass ``Backend`` and
-implement every abstract method.
+Design principle: Every picograd Tensor operation delegates to
+  get_backend().<method>(...)
+so swapping the backend is a single call: picograd.set_backend(new_backend).
 """
 
 from __future__ import annotations
-
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional, Sequence, Tuple, Union
+from typing import Optional, Sequence, Tuple, Union
 
-# Type aliases (backend-agnostic)
+
+# ---------------------------------------------------------------------------
+# Type aliases used in signatures
+# ---------------------------------------------------------------------------
+ArrayLike = object          # np.ndarray  or  whatever the backend uses
 Shape = Tuple[int, ...]
-DType = Any          # concrete type depends on backend (np.float32, etc.)
-ArrayLike = Any      # raw backend array (np.ndarray, cupy.ndarray, …)
+DType = object              # np.dtype or string like "float32"
 
 
 class Backend(ABC):
+    """Dispatch table for all numerical operations in picograd.
+
+    A Backend is a *stateless* strategy object.  Every method takes raw
+    backend arrays (e.g. np.ndarray) and returns raw backend arrays.
+    The Tensor class wraps these arrays and calls get_backend().method().
     """
-    Pure-virtual backend bois.  Dekho bhai, subclasses will provide them implementations."""
 
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Human-readable name, e.g. ``'numpy'``, ``'triton'``."""
-        ...
-
-    @abstractmethod
-    def empty(self, shape: Shape, dtype: DType | None = None) -> ArrayLike:
-        ...
-
-    @abstractmethod
-    def zeros(self, shape: Shape, dtype: DType | None = None) -> ArrayLike:
-        ...
-
-    @abstractmethod
-    def ones(self, shape: Shape, dtype: DType | None = None) -> ArrayLike:
-        ...
-
-    @abstractmethod
-    def full(self, shape: Shape, fill_value: float, dtype: DType | None = None) -> ArrayLike:
-        ...
-
-    @abstractmethod
-    def arange(self, start: float, stop: float, step: float = 1.0, dtype: DType | None = None) -> ArrayLike:
-        ...
-
-    @abstractmethod
-    def eye(self, n: int, dtype: DType | None = None) -> ArrayLike:
-        ...
-
-    @abstractmethod
-    def from_numpy(self, arr: Any) -> ArrayLike:
-        """Import an ``np.ndarray`` into this backend's array type."""
-        ...
-
-    @abstractmethod
-    def to_numpy(self, a: ArrayLike) -> Any:
-        """Export a backend array to a plain ``np.ndarray``."""
-        ...
-
-    @abstractmethod
-    def array(self, data: Any, dtype: DType | None = None) -> ArrayLike:
-        """Create a backend array from a Python list / nested list / scalar."""
-        ...
-
-    @abstractmethod
-    def copy(self, a: ArrayLike) -> ArrayLike:
-        ...
-
-    @abstractmethod
-    def shape_of(self, a: ArrayLike) -> Shape:
-        ...
-
-    @abstractmethod
-    def dtype_of(self, a: ArrayLike) -> DType:
-        ...
+    # ------------------------------------------------------------------
+    # 1.  Creation
+    # ------------------------------------------------------------------
 
     @abstractmethod
-    def numel(self, a: ArrayLike) -> int:
-        ...
+    def empty(self, shape: Shape, dtype=None) -> ArrayLike:
+        """Return uninitialized array of given shape."""
 
     @abstractmethod
-    def ndim(self, a: ArrayLike) -> int:
-        ...
+    def zeros(self, shape: Shape, dtype=None) -> ArrayLike:
+        """Return array of zeros."""
 
     @abstractmethod
-    def is_floating_point(self, a: ArrayLike) -> bool:
-        ...
+    def ones(self, shape: Shape, dtype=None) -> ArrayLike:
+        """Return array of ones."""
 
     @abstractmethod
-    def astype(self, a: ArrayLike, dtype: DType) -> ArrayLike:
-        ...
+    def full(self, shape: Shape, fill_value, dtype=None) -> ArrayLike:
+        """Return array filled with fill_value."""
 
     @abstractmethod
-    def default_float_dtype(self) -> DType:
-        ...
+    def arange(self, start, stop=None, step=1, dtype=None) -> ArrayLike:
+        """Return evenly spaced values within a given interval."""
 
     @abstractmethod
-    def add(self, a: ArrayLike, b: ArrayLike) -> ArrayLike:
-        ...
+    def from_numpy(self, arr) -> ArrayLike:
+        """Convert numpy array → backend array (may be a copy or view)."""
 
     @abstractmethod
-    def sub(self, a: ArrayLike, b: ArrayLike) -> ArrayLike:
-        ...
+    def to_numpy(self, data: ArrayLike):
+        """Convert backend array → numpy ndarray."""
 
-    @abstractmethod
-    def mul(self, a: ArrayLike, b: ArrayLike) -> ArrayLike:
-        ...
+    # ------------------------------------------------------------------
+    # 2.  Elementwise binary ops (broadcast semantics)
+    # ------------------------------------------------------------------
 
     @abstractmethod
-    def div(self, a: ArrayLike, b: ArrayLike) -> ArrayLike:
-        ...
+    def add(self, a: ArrayLike, b: ArrayLike) -> ArrayLike: ...
 
     @abstractmethod
-    def neg(self, a: ArrayLike) -> ArrayLike:
-        ...
+    def sub(self, a: ArrayLike, b: ArrayLike) -> ArrayLike: ...
 
     @abstractmethod
-    def pow(self, a: ArrayLike, exp: Union[ArrayLike, float]) -> ArrayLike:
-        ...
+    def mul(self, a: ArrayLike, b: ArrayLike) -> ArrayLike: ...
 
     @abstractmethod
-    def exp(self, a: ArrayLike) -> ArrayLike:
-        ...
+    def div(self, a: ArrayLike, b: ArrayLike) -> ArrayLike: ...
 
     @abstractmethod
-    def log(self, a: ArrayLike) -> ArrayLike:
-        ...
+    def pow(self, a: ArrayLike, exp) -> ArrayLike: ...
 
-    @abstractmethod
-    def abs(self, a: ArrayLike) -> ArrayLike:
-        ...
+    # ------------------------------------------------------------------
+    # 3.  Elementwise unary ops
+    # ------------------------------------------------------------------
 
     @abstractmethod
-    def sqrt(self, a: ArrayLike) -> ArrayLike:
-        ...
+    def exp(self, a: ArrayLike) -> ArrayLike: ...
 
     @abstractmethod
-    def clip(self, a: ArrayLike, a_min: Optional[float], a_max: Optional[float]) -> ArrayLike:
-        ...
+    def log(self, a: ArrayLike) -> ArrayLike: ...
 
     @abstractmethod
-    def maximum(self, a: ArrayLike, b: ArrayLike) -> ArrayLike:
-        ...
+    def neg(self, a: ArrayLike) -> ArrayLike: ...
 
     @abstractmethod
-    def minimum(self, a: ArrayLike, b: ArrayLike) -> ArrayLike:
-        ...
+    def abs(self, a: ArrayLike) -> ArrayLike: ...
 
     @abstractmethod
-    def sign(self, a: ArrayLike) -> ArrayLike:
-        ...
+    def clip(self, a: ArrayLike, a_min, a_max) -> ArrayLike: ...
 
     @abstractmethod
-    def tanh(self, a: ArrayLike) -> ArrayLike:
-        ...
+    def sqrt(self, a: ArrayLike) -> ArrayLike: ...
 
+    # ------------------------------------------------------------------
+    # 4.  Comparison
+    # ------------------------------------------------------------------
 
     @abstractmethod
-    def eq(self, a: ArrayLike, b: ArrayLike) -> ArrayLike:
-        ...
+    def eq(self, a: ArrayLike, b: ArrayLike) -> ArrayLike: ...
 
     @abstractmethod
-    def ne(self, a: ArrayLike, b: ArrayLike) -> ArrayLike:
-        ...
+    def gt(self, a: ArrayLike, b: ArrayLike) -> ArrayLike: ...
 
     @abstractmethod
-    def gt(self, a: ArrayLike, b: ArrayLike) -> ArrayLike:
-        ...
+    def lt(self, a: ArrayLike, b: ArrayLike) -> ArrayLike: ...
 
     @abstractmethod
-    def ge(self, a: ArrayLike, b: ArrayLike) -> ArrayLike:
-        ...
+    def where(self, condition: ArrayLike, x: ArrayLike, y: ArrayLike) -> ArrayLike: ...
 
-    @abstractmethod
-    def lt(self, a: ArrayLike, b: ArrayLike) -> ArrayLike:
-        ...
+    # ------------------------------------------------------------------
+    # 5.  Reductions
+    # ------------------------------------------------------------------
 
     @abstractmethod
-    def le(self, a: ArrayLike, b: ArrayLike) -> ArrayLike:
-        ...
+    def sum(self, a: ArrayLike, axis=None, keepdims: bool = False) -> ArrayLike: ...
 
     @abstractmethod
-    def where(self, condition: ArrayLike, x: ArrayLike, y: ArrayLike) -> ArrayLike:
-        ...
+    def mean(self, a: ArrayLike, axis=None, keepdims: bool = False) -> ArrayLike: ...
 
     @abstractmethod
-    def sum(self, a: ArrayLike, axis: Optional[Union[int, Tuple[int, ...]]] = None,
-            keepdims: bool = False) -> ArrayLike:
-        ...
+    def max(self, a: ArrayLike, axis=None, keepdims: bool = False) -> ArrayLike: ...
 
     @abstractmethod
-    def mean(self, a: ArrayLike, axis: Optional[Union[int, Tuple[int, ...]]] = None,
-             keepdims: bool = False) -> ArrayLike:
-        ...
+    def min(self, a: ArrayLike, axis=None, keepdims: bool = False) -> ArrayLike: ...
 
     @abstractmethod
-    def max(self, a: ArrayLike, axis: Optional[int] = None,
-            keepdims: bool = False) -> ArrayLike:
-        ...
+    def argmax(self, a: ArrayLike, axis=None) -> ArrayLike: ...
 
     @abstractmethod
-    def min(self, a: ArrayLike, axis: Optional[int] = None,
-            keepdims: bool = False) -> ArrayLike:
-        ...
+    def argmin(self, a: ArrayLike, axis=None) -> ArrayLike: ...
 
-    @abstractmethod
-    def argmax(self, a: ArrayLike, axis: Optional[int] = None) -> ArrayLike:
-        ...
+    # ------------------------------------------------------------------
+    # 6.  Linear algebra
+    # ------------------------------------------------------------------
 
     @abstractmethod
-    def argmin(self, a: ArrayLike, axis: Optional[int] = None) -> ArrayLike:
-        ...
+    def matmul(self, a: ArrayLike, b: ArrayLike) -> ArrayLike: ...
 
     @abstractmethod
-    def matmul(self, a: ArrayLike, b: ArrayLike) -> ArrayLike:
-        ...
+    def transpose(self, a: ArrayLike, axes=None) -> ArrayLike:
+        """Permute dimensions.  axes=None reverses all dims."""
 
-    @abstractmethod
-    def reshape(self, a: ArrayLike, shape: Shape) -> ArrayLike:
-        ...
+    # ------------------------------------------------------------------
+    # 7.  Shape manipulation
+    # ------------------------------------------------------------------
 
     @abstractmethod
-    def transpose(self, a: ArrayLike, axes: Optional[Sequence[int]] = None) -> ArrayLike:
-        ...
+    def reshape(self, a: ArrayLike, shape: Shape) -> ArrayLike: ...
 
     @abstractmethod
-    def swapaxes(self, a: ArrayLike, axis1: int, axis2: int) -> ArrayLike:
-        ...
+    def expand(self, a: ArrayLike, shape: Shape) -> ArrayLike:
+        """Broadcast a to shape (no data copy, read-only view)."""
 
     @abstractmethod
-    def expand_dims(self, a: ArrayLike, axis: int) -> ArrayLike:
-        ...
+    def concatenate(self, tensors: Sequence[ArrayLike], axis: int = 0) -> ArrayLike: ...
 
     @abstractmethod
-    def squeeze(self, a: ArrayLike, axis: Optional[int] = None) -> ArrayLike:
-        ...
+    def stack(self, tensors: Sequence[ArrayLike], axis: int = 0) -> ArrayLike: ...
 
     @abstractmethod
-    def broadcast_to(self, a: ArrayLike, shape: Shape) -> ArrayLike:
-        ...
+    def split(self, a: ArrayLike, indices_or_sections, axis: int = 0): ...
 
     @abstractmethod
-    def concatenate(self, tensors: Sequence[ArrayLike], axis: int = 0) -> ArrayLike:
-        ...
+    def squeeze(self, a: ArrayLike, axis=None) -> ArrayLike: ...
 
     @abstractmethod
-    def stack(self, tensors: Sequence[ArrayLike], axis: int = 0) -> ArrayLike:
-        ...
+    def unsqueeze(self, a: ArrayLike, axis: int) -> ArrayLike: ...
 
     @abstractmethod
-    def split(self, a: ArrayLike, indices_or_sections: Union[int, Sequence[int]],
-              axis: int = 0) -> List[ArrayLike]:
-        ...
+    def flip(self, a: ArrayLike, axis=None) -> ArrayLike: ...
 
     @abstractmethod
-    def flip(self, a: ArrayLike, axis: Optional[Union[int, Tuple[int, ...]]] = None) -> ArrayLike:
-        ...
+    def pad(self, a: ArrayLike, pad_width, mode: str = "constant", constant_values=0) -> ArrayLike: ...
 
+    # ------------------------------------------------------------------
+    # 8.  Indexing / scatter-gather
+    # ------------------------------------------------------------------
 
-    #Dekho, padding and slcing model ne implemnt kiya hai, so be carefuol
     @abstractmethod
-    def pad(self, a: ArrayLike, pad_width: Sequence[Tuple[int, int]],
-            mode: str = "constant", constant_values: float = 0.0) -> ArrayLike:
-        ...
+    def gather(self, a: ArrayLike, indices: ArrayLike, axis: int) -> ArrayLike:
+        """Gather elements from a along axis using indices."""
 
     @abstractmethod
-    def slice_along(self, a: ArrayLike, slices: Tuple) -> ArrayLike:
-        """Fancy / basic indexing — equivalent to ``a[slices]``."""
-        ...
+    def scatter_add(self, target: ArrayLike, indices: ArrayLike, src: ArrayLike, axis: int) -> ArrayLike:
+        """Return a new array with src values scattered-added into target at indices."""
 
-    @abstractmethod
-    def set_slice(self, a: ArrayLike, slices: Tuple, value: ArrayLike) -> ArrayLike:
-        """Return a copy slice with val applied.
-        """
-        ...
+    # ------------------------------------------------------------------
+    # 9.  Random
+    # ------------------------------------------------------------------
 
     @abstractmethod
-    def scatter_add(self, a: ArrayLike, axis: int, index: ArrayLike,
-                    src: ArrayLike) -> ArrayLike:
-        """``a[index] += src`` along *axis*.  Returns the updated array."""
-        ...
+    def randn(self, shape: Shape, dtype=None) -> ArrayLike:
+        """Sample from standard normal N(0,1)."""
 
     @abstractmethod
-    def seed(self, n: int) -> None:
-        ...
+    def rand(self, shape: Shape, dtype=None) -> ArrayLike:
+        """Sample from uniform U(0,1)."""
 
     @abstractmethod
-    def randn(self, shape: Shape, dtype: DType | None = None) -> ArrayLike:
-        ...
+    def randint(self, low: int, high: int, shape: Shape) -> ArrayLike: ...
 
     @abstractmethod
-    def rand(self, shape: Shape, dtype: DType | None = None) -> ArrayLike:
-        ...
+    def seed(self, n: int) -> None: ...
 
     @abstractmethod
-    def randint(self, low: int, high: int, shape: Shape) -> ArrayLike:
-        ...
+    def dropout_mask(self, shape: Shape, p: float) -> ArrayLike:
+        """Return boolean keep-mask with P(keep) = 1-p."""
 
-    @abstractmethod
-    def dropout_mask(self, shape: Shape, p: float, dtype: DType | None = None) -> ArrayLike:
-        """Return a mask of 0s and 1s where each element is 0 with probability *p*."""
-        ...
+    # ------------------------------------------------------------------
+    # 10.  Misc
+    # ------------------------------------------------------------------
 
     @abstractmethod
-    def randperm(self, n: int) -> ArrayLike:
-        ...
-
+    def copy(self, a: ArrayLike) -> ArrayLike: ...
 
     @abstractmethod
     def contiguous(self, a: ArrayLike) -> ArrayLike:
-        ...
+        """Return a C-contiguous copy of a."""
 
+    @abstractmethod
+    def dtype_of(self, a: ArrayLike): ...
 
-    # @abstractmethod
-    # def im2col(self, a: ArrayLike, kernel_h: int, kernel_w: int,
-    #            stride: int = 1, padding: int = 0, dilation: int = 1) -> ArrayLike:
-    #     """Extract sliding local blocks from a batched 4-D image tensor.
+    @abstractmethod
+    def shape_of(self, a: ArrayLike) -> Shape: ...
 
-    #     Parameters
-    #     ----------
-    #     a : (N, C, H, W)
-    #     Returns col : (N, C*kH*kW, out_H*out_W)
-    #     """
-    #     ...
+    @abstractmethod
+    def numel(self, a: ArrayLike) -> int: ...
 
-    # @abstractmethod
-    # def col2im(self, col: ArrayLike, input_shape: Shape,
-    #            kernel_h: int, kernel_w: int,
-    #            stride: int = 1, padding: int = 0, dilation: int = 1) -> ArrayLike:
-    #     """Inverse of ``im2col``."""
-    #     ...
+    @abstractmethod
+    def item(self, a: ArrayLike):
+        """Return Python scalar from a 0-d or 1-element array."""
+
+    @abstractmethod
+    def cast(self, a: ArrayLike, dtype) -> ArrayLike:
+        """Cast a to given dtype."""
+
+    # ------------------------------------------------------------------
+    # 11.  Convenience helpers (non-abstract; use the abstract methods)
+    # ------------------------------------------------------------------
+
+    def zeros_like(self, a: ArrayLike) -> ArrayLike:
+        return self.zeros(self.shape_of(a), dtype=self.dtype_of(a))
+
+    def ones_like(self, a: ArrayLike) -> ArrayLike:
+        return self.ones(self.shape_of(a), dtype=self.dtype_of(a))
+
+    def full_like(self, a: ArrayLike, fill_value) -> ArrayLike:
+        return self.full(self.shape_of(a), fill_value, dtype=self.dtype_of(a))
