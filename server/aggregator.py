@@ -99,7 +99,7 @@ def aggregate_periodically(interval_sec=30):
             except Exception as e:
                 print("[Aggregator] aggregation error:", e)
 
-def serve(bind_addr="0.0.0.0:50051", use_tls=False):
+def serve(bind_addr="0.0.0.0:50051", use_tls=True):
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=16), options=SERVER_OPTIONS)
     fl_pb2_grpc.add_FederatedServicer_to_server(FederatedService(), server)
 

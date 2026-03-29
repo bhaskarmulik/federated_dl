@@ -1,8 +1,12 @@
-import os, json, grpc, torch
+import os, sys, json, grpc, torch
+
+# Add parent directory to path to import proto module
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from proto.fl_pb2 import ClientInfo, PullGlobalRequest, LocalUpdate, ModelBlob
 from proto import fl_pb2_grpc
 
-from . model_io import bytes_to_state_dict, state_dict_to_bytes
+from client.model_io import bytes_to_state_dict, state_dict_to_bytes
 
 MAX_MB = 256
 CHANNEL_OPTS = [
@@ -10,7 +14,7 @@ CHANNEL_OPTS = [
     ('grpc.max_send_message_length', MAX_MB * 1024 * 1024),
 ]
 
-def grpc_channel(target="localhost:50051", use_tls=False):
+def grpc_channel(target="10.105.47.59:50051", use_tls=False):
     if use_tls:
         with open("tls/ca.crt","rb") as f: ca = f.read()
         with open("tls/client.crt","rb") as f: cert = f.read()
@@ -36,18 +40,15 @@ def push_update(stub, client_info, round_id, model, num_samples, metrics=None):
     ack = stub.PushUpdate(upd)
     return ack
 
-# ------------------------
-# Example training routine
-# ------------------------
+
 def local_train_one_round(model, dataloader, plan):
-    # TODO: replace with your actual pipeline
+    # TODO: 
     model.train()
-    # dummy: no-op training for demo
     metrics = {"loss": 0.0, "acc": 0.0}
-    num_samples = 100  # set to len(dataset) actually used
+    num_samples = 100 
     return model, num_samples, metrics
 
-def run_client(target="localhost:50051", use_tls=False):
+def run_client(target="10.105.47.59:50051", use_tls=False):
     channel = grpc_channel(target, use_tls)
     stub = fl_pb2_grpc.FederatedStub(channel)
 
@@ -59,19 +60,15 @@ def run_client(target="localhost:50051", use_tls=False):
         version="1.0.0"
     )
 
-    # 1) Build your local model here
     import torchvision.models as models
     model = models.resnet18(num_classes=2)
-    # 2) Pull global
     resp = pull_global(stub, client, model=model)
     round_id = resp.plan.round_id
     print(f"[Client] Pulled global for round {round_id}")
 
-    # 3) Train locally
-    dummy_loader = []  # replace with your dataloader
+    dummy_loader = []  
     model, n, metrics = local_train_one_round(model, dummy_loader, resp.plan)
 
-    # 4) Push update
     ack = push_update(stub, client, round_id, model, n, metrics)
     print("[Client] PushUpdate:", ack.status, ack.message)
 
