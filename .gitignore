@@ -41,7 +41,7 @@ models/*
 !models/.gitkeep
 
 datasets/
-data/
+# data/
 
 *.csv
 *.npz
