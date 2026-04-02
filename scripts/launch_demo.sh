@@ -48,7 +48,7 @@ echo "  Non-IID alpha:   $ALPHA"
 echo "==============================================="
 echo ""
 
-"$ROOT/myenv/Scripts/python.exe" - <<PYEOF
+"$ROOT/.venv/bin/python" - <<PYEOF
 import sys, os
 sys.path.insert(0, '$ROOT')
 import numpy as np
